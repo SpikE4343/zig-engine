@@ -16,16 +16,19 @@ const windowHeight: u16 = 600;
 const renderWidth: u16 = 320;
 const renderHeight: u16 = 240;
 
-var cubeVerts = [_]Vec4f{
-  Vec4f.init(1.0, 1.0, -1.0, 0.0), // 0
-  Vec4f.init(1.0, -1.0, -1.0, 0.0), // 1
-  Vec4f.init(1.0, 1.0, 1.0, 0.0), // 2
-  Vec4f.init(1.0, -1.0, 1.0, 0.0), // 3
 
-  Vec4f.init(-1.0, 1.0, -1.0, 0.0), // 4
-  Vec4f.init(-1.0, -1.0, -1.0, 0.0), // 5
-  Vec4f.init(-1.0, 1.0, 1.0, 0.0), // 6
-  Vec4f.init(-1.0, -1.0, 1.0, 0.0), // 7
+const w=0.1;
+const o=1.0;
+var cubeVerts = [_]Vec4f{
+  Vec4f.init(w, w*o, -w, 0.0), // 0
+  Vec4f.init(w, -w*o, -w, 0.0), // 1
+  Vec4f.init(w, w*o, w, 0.0), // 2
+  Vec4f.init(w, -w*o, w, 0.0), // 3
+
+  Vec4f.init(-w, w*o, -w, 0.0), // 4
+  Vec4f.init(-w, -w*o, -w, 0.0), // 5
+  Vec4f.init(-w, w*o, w, 0.0), // 6
+  Vec4f.init(-w, -w*o, w, 0.0), // 7
 };
 
 // indicies
@@ -76,14 +79,33 @@ pub fn main() !void {
 
     var quit = false;
     var mesh = createCube();
-    var meshMat = Mat44f.createPerspective(65, renderWidth/renderHeight, 0.1, 2000);
+    var projMat = Mat44f.createPerspective(65, renderWidth/renderHeight, 0.1, 2000);
+    var modelMat =Mat44f.identity();
+    var viewMat = Mat44f.identity();
+    var mvp = Mat44f.identity();
+
+    
+    viewMat.translate(Vec4f.init(0,0,-2,0));
+
+
 
     while (!quit) {
         quit = !sys.beginUpdate();
         const b = render.beginFrame();
 
-        render.drawMesh(&meshMat, &mesh);
+        //viewMat.translate(Vec4f.init(0,0,0,0));
+
+        mvp.init(viewMat.mm);
+        mvp.mul(modelMat);
+        mvp.mul(projMat);
+
+        
+        
         // TODO: do game stuff
+
+        render.writePixel(100,100, render.Color.init(255, 128, 64, 255));
+
+        render.drawPointMesh(&mvp, &mesh);
 
         render.endFrame();
 

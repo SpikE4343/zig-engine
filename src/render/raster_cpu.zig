@@ -11,44 +11,51 @@ const Mat44f = @import("../core/matrix.zig").Mat44f;
 
 /// RGBA 32 bit color value
 pub const Color = struct {
-    color : [4]u8 = [4]u8{0, 0, 0, 0},
+    color: [4]u8 = [4]u8{ 0, 0, 0, 0 },
 
-    pub fn r(self : Color) u8
-        { return self.color[0]; }
-    pub fn g(self : Color) u8
-        { return self.color[1]; }
-    pub fn b(self : Color) u8
-        { return self.color[2]; }
-    pub fn a(self : Color) u8
-        { return self.color[3]; }
-    pub fn setR(self : *Color, val : u8) void
-        { self.color[0] = val; }
-    pub fn setG(self : *Color, val : u8) void
-        { self.color[1] = val; }
-    pub fn setB(self : *Color, val : u8) void
-        { self.color[2] = val; }
-    pub fn setA(self : *Color, val : u8) void
-        { self.color[3] = val; }
+    pub fn r(self: Color) u8 {
+        return self.color[0];
+    }
+    pub fn g(self: Color) u8 {
+        return self.color[1];
+    }
+    pub fn b(self: Color) u8 {
+        return self.color[2];
+    }
+    pub fn a(self: Color) u8 {
+        return self.color[3];
+    }
+    pub fn setR(self: *Color, val: u8) void {
+        self.color[0] = val;
+    }
+    pub fn setG(self: *Color, val: u8) void {
+        self.color[1] = val;
+    }
+    pub fn setB(self: *Color, val: u8) void {
+        self.color[2] = val;
+    }
+    pub fn setA(self: *Color, val: u8) void {
+        self.color[3] = val;
+    }
 
     pub fn white() Color {
-        var color = Color{.color = [4]u8{255, 255, 255, 255}};
+        var color = Color{ .color = [4]u8{ 255, 255, 255, 255 } };
         return color;
     }
 
     pub fn black() Color {
-        var color = Color{.color = [4]u8{0, 0, 0, 255}};
+        var color = Color{ .color = [4]u8{ 0, 0, 0, 255 } };
         return color;
     }
 
-    pub fn init(r:u8, g:u8, b:u8, a:u8) Color {
-      return Color{.color=[4]u8{r, g, b, a}};
+    pub fn init(cr: u8, cg: u8, cb: u8, ca: u8) Color {
+        return Color{ .color = [4]u8{ cr, cg, cb, ca } };
     }
 };
 
-
 const Vec2 = struct {
-    x : f64,
-    y : f64,
+    x: f64,
+    y: f64,
 };
 
 pub fn dot(a: Vec2, b: Vec2) f64 {
@@ -59,49 +66,46 @@ pub fn norm(a: Vec2) Vec2 {
     const len = @sqrt(dot(a, a));
     return Vec2{
         .x = a.x / len,
-        .y = a.y / len
+        .y = a.y / len,
     };
 }
 
 pub fn scale(a: Vec2, b: f64) Vec2 {
-    return Vec2 {
+    return Vec2{
         .x = a.x * b,
-        .y = a.y * b
+        .y = a.y * b,
     };
 }
 
-
 pub const Mesh = struct {
-  vertexBuffer : [] Vec4f,
-  indexBuffer : [] u16,
-  colorBuffer : [] Vec4f,
+    vertexBuffer: []Vec4f,
+    indexBuffer: []u16,
+    colorBuffer: []Vec4f,
 
-  pub fn init( verts : [] Vec4f, indicies: [] u16, colors : []Vec4f) Mesh
-  {
-    return Mesh{ 
-      .vertexBuffer = verts,
-      .indexBuffer = indicies,
-      .colorBuffer = colors
-    };
-  }
-
+    pub fn init(verts: []Vec4f, indicies: []u16, colors: []Vec4f) Mesh {
+        return Mesh{
+            .vertexBuffer = verts,
+            .indexBuffer = indicies,
+            .colorBuffer = colors,
+        };
+    }
 };
 
 const PixelBuffers = struct {
-    const pixelsCapacity = 4000*4000;
-    buffers : [2][pixelsCapacity]Color,
-    frontIndex : usize,
-    w : usize,
-    h : usize,
+    const pixelsCapacity = 4000 * 4000;
+    buffers: [2][pixelsCapacity]Color,
+    frontIndex: usize,
+    w: usize,
+    h: usize,
 
-    pub fn init(self : *PixelBuffers, nW : usize, nH : usize) void {
+    pub fn init(self: *PixelBuffers, nW: usize, nH: usize) void {
         self.*.frontIndex = 1;
         self.*.w = nW;
         self.*.h = nH;
-        var y : usize = 0;
-        while(y < nH) {
-            var x : usize = 0;
-            while(x < nW) {
+        var y: usize = 0;
+        while (y < nH) {
+            var x: usize = 0;
+            while (x < nW) {
                 self.*.buffers[0][x + nW * y] = Color.black();
                 self.*.buffers[1][x + nW * y] = Color.black();
                 x += 1;
@@ -110,82 +114,77 @@ const PixelBuffers = struct {
         }
     }
 
-    pub fn clearFront(self: *PixelBuffers, c:Color) void {
-      var y : usize = 0;
-      while(y < self.h) {
-          var x : usize = 0;
-          while(x < self.w) {
-              self.*.buffers[self.*.frontIndex][x + self.w * y] = Color.black();
-              x += 1;
-          }
-          y += 1;
-      }
+    pub fn clearFront(self: *PixelBuffers, c: Color) void {
+        var y: usize = 0;
+        while (y < self.h) {
+            var x: usize = 0;
+            while (x < self.w) {
+                self.*.buffers[self.*.frontIndex][x + self.w * y] = c;
+                x += 1;
+            }
+            y += 1;
+        }
     }
 
-    pub inline fn write(self : *PixelBuffers, x : c_int, y : c_int, color : Color) void {
-        if(x >= 0 and y >= 0 and x < @intCast(c_int, self.w) and y < @intCast(c_int, self.h)) {
+    pub inline fn write(self: *PixelBuffers, x: c_int, y: c_int, color: Color) void {
+        if (x >= 0 and y >= 0 and x < @intCast(c_int, self.w) and y < @intCast(c_int, self.h)) {
             const ux = @intCast(usize, x);
             const uy = @intCast(usize, y);
             self.*.buffers[self.frontIndex][ux + self.*.w * uy] = color;
         }
     }
 
-    pub fn drawThickLine(self : *PixelBuffers,
-        xFrom : c_int, yFrom : c_int, xTo : c_int, yTo : c_int,
-        color : Color, thickness : f64) void
-    {
+    pub fn drawThickLine(self: *PixelBuffers, xFrom: c_int, yFrom: c_int, xTo: c_int, yTo: c_int, color: Color, thickness: f64) void {
         const thickness2 = thickness * thickness;
-        var x0 : c_int = undefined;
-        var x1 : c_int = undefined;
-        var y0 : c_int = undefined;
-        var y1 : c_int = undefined;
-        if(xFrom < xTo) {
+        var x0: c_int = undefined;
+        var x1: c_int = undefined;
+        var y0: c_int = undefined;
+        var y1: c_int = undefined;
+        if (xFrom < xTo) {
             x0 = xFrom;
             x1 = xTo;
-        }
-        else {
+        } else {
             x0 = xTo;
             x1 = xFrom;
         }
-        if(yFrom < yTo) {
+        if (yFrom < yTo) {
             y0 = yFrom;
             y1 = yTo;
-        }
-        else {
+        } else {
             y0 = yTo;
             y1 = yFrom;
         }
 
-        if(x0 == x1 and y0 == y1) {
+        if (x0 == x1 and y0 == y1) {
             return;
         }
 
-        const intThickness = @floatToInt(c_int, @ceil( thickness));
+        const intThickness = @floatToInt(c_int, @ceil(thickness));
         const X0 = x0 - intThickness;
         const Y0 = y0 - intThickness;
         const X1 = x1 + intThickness;
         const Y1 = y1 + intThickness;
 
-        const v01 = Vec2 {
+        const v01 = Vec2{
             .x = @intToFloat(f64, xTo - xFrom),
-            .y = @intToFloat(f64, yTo - yFrom)
+            .y = @intToFloat(f64, yTo - yFrom),
         };
 
-        var iy : c_int = Y0;
-        while(iy <= Y1) {
-            const y : f64 = @intToFloat(f64, iy);
-            var ix : c_int = X0;
-            while(ix <= X1) {
-                const x : f64 = @intToFloat(f64, ix);
-                const v = Vec2 {
+        var iy: c_int = Y0;
+        while (iy <= Y1) {
+            const y: f64 = @intToFloat(f64, iy);
+            var ix: c_int = X0;
+            while (ix <= X1) {
+                const x: f64 = @intToFloat(f64, ix);
+                const v = Vec2{
                     .x = x - @intToFloat(f64, xFrom),
-                    .y = y - @intToFloat(f64, yFrom)
+                    .y = y - @intToFloat(f64, yFrom),
                 };
                 const h1 = dot(v, v);
                 const c1 = dot(norm(v01), v) * dot(norm(v01), v);
-                const distToLine2 : f64 = h1 - c1;
+                const distToLine2: f64 = h1 - c1;
                 assert(distToLine2 > -0.001);
-                if(distToLine2 < thickness2) {
+                if (distToLine2 < thickness2) {
                     self.write(ix, iy, color);
                 }
                 ix += 1;
@@ -194,64 +193,56 @@ const PixelBuffers = struct {
         }
     }
 
-    pub fn drawLine(self : *PixelBuffers,
-        xFrom : c_int, yFrom : c_int, xTo : c_int, yTo : c_int,
-        color : Color) void
-    {
-        if(xFrom == xTo and yFrom == yTo) {
+    pub fn drawLine(self: *PixelBuffers, xFrom: c_int, yFrom: c_int, xTo: c_int, yTo: c_int, color: Color) void {
+        if (xFrom == xTo and yFrom == yTo) {
             self.write(xFrom, yFrom, color);
         }
-        var x0 : c_int = undefined;
-        var x1 : c_int = undefined;
-        var y0 : c_int = undefined;
-        var y1 : c_int = undefined;
-        var invX : bool = undefined;
-        var invY : bool = undefined;
-        if(xFrom < xTo) {
+        var x0: c_int = undefined;
+        var x1: c_int = undefined;
+        var y0: c_int = undefined;
+        var y1: c_int = undefined;
+        var invX: bool = undefined;
+        var invY: bool = undefined;
+        if (xFrom < xTo) {
             x0 = xFrom;
             x1 = xTo;
             invX = false;
-        }
-        else {
+        } else {
             x0 = xTo;
             x1 = xFrom;
             invX = true;
         }
-        if(yFrom < yTo) {
+        if (yFrom < yTo) {
             y0 = yFrom;
             y1 = yTo;
             invY = false;
-        }
-        else {
+        } else {
             y0 = yTo;
             y1 = yFrom;
             invY = true;
         }
-        if(x1 - x0 < y1 - y0) {
-            var y : c_int = y0;
-            while(y <= y1) {
+        if (x1 - x0 < y1 - y0) {
+            var y: c_int = y0;
+            while (y <= y1) {
                 const inc = @divFloor((x1 - x0 + 1) * (y - y0), y1 - y0 + 1);
                 const x = block: {
-                    if(invX == invY) {
+                    if (invX == invY) {
                         break :block x0 + inc;
-                    }
-                    else {
+                    } else {
                         break :block x1 - inc;
                     }
                 };
                 write(self, x, y, color);
                 y += 1;
             }
-        }
-        else {
-            var x : c_int = x0;
-            while(x <= x1) {
+        } else {
+            var x: c_int = x0;
+            while (x <= x1) {
                 const inc = @divFloor((y1 - y0 + 1) * (x - x0), x1 - x0 + 1);
                 const y = block: {
-                    if(invX == invY) {
+                    if (invX == invY) {
                         break :block y0 + inc;
-                    }
-                    else {
+                    } else {
                         break :block y1 - inc;
                     }
                 };
@@ -261,13 +252,13 @@ const PixelBuffers = struct {
         }
     }
 
-    pub fn resize(self : *PixelBuffers, nW : usize, nH : usize) void {
+    pub fn resize(self: *PixelBuffers, nW: usize, nH: usize) void {
         const front = self.*.frontIndex;
         const back = front ^ 1;
-        var y : usize = 0;
-        while(y < nH) {
-            var x : usize = 0;
-            while(x < nW) {
+        var y: usize = 0;
+        while (y < nH) {
+            var x: usize = 0;
+            while (x < nW) {
                 self.*.buffers[back][x + nW * y] = Color.white();
                 x += 1;
             }
@@ -275,9 +266,9 @@ const PixelBuffers = struct {
         }
 
         y = 0;
-        while(y < std.math.min(self.*.h, nH)) {
-            var x : usize = 0;
-            while(x < std.math.min(self.*.w, nW)) {
+        while (y < std.math.min(self.*.h, nH)) {
+            var x: usize = 0;
+            while (x < std.math.min(self.*.w, nW)) {
                 self.*.buffers[back][x + nW * y] = self.*.buffers[front][x + self.*.w * y];
                 x += 1;
             }
@@ -295,234 +286,242 @@ const PixelBuffers = struct {
     }
 
     pub inline fn bufferStart(self: *PixelBuffers) *u8 {
-      return &self.*.buffers[self.frontIndex][0].color[0];
+        return &self.*.buffers[self.frontIndex][0].color[0];
     }
 
-    pub inline fn bufferLineSize(self : *PixelBuffers) usize {
-      return self.w * @sizeOf(u32);
+    pub inline fn bufferLineSize(self: *PixelBuffers) usize {
+        return self.w * @sizeOf(u32);
     }
 };
 
-const Bounds = struct 
-{
-  min: Vec4f,
-  max: Vec4f,
+const Bounds = struct {
+    min: Vec4f,
+    max: Vec4f,
 
-  pub fn init(min:Vec4f, max:Vec4f) Bounds {
-    return Bounds {
-      .min = min,
-      .max = max
-    };
-  }
-  
-  pub fn add(self:*Bounds, point:Vec4f) void
-  {
-    if( point.x < self.min.x )
-      self.min.x = point.x;
+    pub fn init(min: Vec4f, max: Vec4f) Bounds {
+        return Bounds{
+            .min = min,
+            .max = max,
+        };
+    }
 
-    if( point.y < self.min.y )
-      self.min.y = point.y;
+    pub fn add(self: *Bounds, point: Vec4f) void {
+        if (point.x < self.min.x)
+            self.min.x = point.x;
 
-    if( point.z < self.min.z )
-      self.min.z = point.z;
+        if (point.y < self.min.y)
+            self.min.y = point.y;
 
-    if( point.w < self.min.w )
-      self.min.w = point.w;
+        if (point.z < self.min.z)
+            self.min.z = point.z;
 
+        if (point.w < self.min.w)
+            self.min.w = point.w;
 
-    if( point.x > self.max.x )
-      self.max.x = point.x;
+        if (point.x > self.max.x)
+            self.max.x = point.x;
 
-    if( point.y > self.max.y )
-      self.max.y = point.y;
+        if (point.y > self.max.y)
+            self.max.y = point.y;
 
-    if( point.z > self.max.z )
-      self.max.z = point.z;
+        if (point.z > self.max.z)
+            self.max.z = point.z;
 
-    if( point.w > self.max.w )
-      self.max.w = point.w;
-  }
+        if (point.w > self.max.w)
+            self.max.w = point.w;
+    }
 
-  pub fn limit(self:*Bounds, l:Bounds) void 
-  {
-    if( self.min.x < l.min.x )
-      self.min.x = l.min.x;
+    pub fn limit(self: *Bounds, l: Bounds) void {
+        if (self.min.x < l.min.x)
+            self.min.x = l.min.x;
 
-    if( self.min.y < l.min.y )
-      self.min.y = l.min.y;
+        if (self.min.y < l.min.y)
+            self.min.y = l.min.y;
 
-    if( self.min.z < l.min.z )
-      self.min.z = l.min.z;
+        if (self.min.z < l.min.z)
+            self.min.z = l.min.z;
 
-    if( self.min.w < l.min.w )
-      self.min.w = l.min.w;
+        if (self.min.w < l.min.w)
+            self.min.w = l.min.w;
 
+        if (self.max.x > l.max.x)
+            self.max.x = l.max.x;
 
-    if( self.max.x > l.max.x )
-      self.max.x = l.max.x;
+        if (self.max.y > l.max.y)
+            self.max.y = l.max.y;
 
-    if( self.max.y > l.max.y )
-      self.max.y = l.max.y;
+        if (self.max.z > l.max.z)
+            self.max.z = l.max.z;
 
-    if( self.max.z > l.max.z )
-      self.max.z = l.max.z;
-
-    if( self.max.w > l.max.w )
-      self.max.w = l.max.w;
-  }
+        if (self.max.w > l.max.w)
+            self.max.w = l.max.w;
+    }
 };
 
-var pixels : PixelBuffers = undefined;
+var pixels: PixelBuffers = undefined;
 
 pub fn bufferStart() *u8 {
-  return pixels.bufferStart();
+    return pixels.bufferStart();
 }
 
 pub fn bufferLineSize() usize {
-  return pixels.bufferLineSize();
+    return pixels.bufferLineSize();
 }
 
-pub fn init(renderWidth:u16, renderHeight:u16) !void
-{
+pub fn init(renderWidth: u16, renderHeight: u16) !void {
     pixels.init(renderWidth, renderHeight);
 }
 
-pub fn drawMesh(mvp: *Mat44f, mesh: *Mesh) void 
-{
-  const ids = mesh.indexBuffer.len;
-  const numTris = ids/3;
+pub fn drawMesh(mvp: *Mat44f, mesh: *Mesh) void {
+    const ids = mesh.indexBuffer.len;
+    const numTris = ids / 3;
 
-  var t:u16 = 0;
-  while(t < ids)
-  {
-    drawTri(mvp, t, mesh);
-    t += 3;
-  }
+    var t: u16 = 0;
+    while (t < ids) {
+        drawTri(mvp, t, mesh);
+        t += 3;
+    }
 }
 
-pub fn triEdge( a:Vec4f, b:Vec4f, c:Vec4f) f32
-{
-  return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
+pub fn drawPointMesh(mvp: *Mat44f, mesh: *Mesh) void {
+    const ids = mesh.vertexBuffer.len;
+
+    for(mesh.vertexBuffer) |vertex, i| {
+      drawPoint(mvp, vertex, mesh.colorBuffer[i]);
+    }
 }
 
-pub fn applyVertexShader(mvp:*Mat44f, index:u16, v:Vec4f) Vec4f 
-{
-  var out = mvp.mul33(v);
-  const hW = @intToFloat(f32, pixels.w)/2;
-  const hH = @intToFloat(f32, pixels.h)/2;
+pub fn triEdge(a: Vec4f, b: Vec4f, c: Vec4f) f32 {
+    return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
+}
 
-  // center in viewport
-  out.x = hW * out.y + hW;
-  out.x = hH * -out.y + hH;
-  return out;
+pub fn applyVertexShader(mvp: *Mat44f, index: u16, v: Vec4f) Vec4f {
+    var out = mvp.mul33(v);
+    const hW = @intToFloat(f32, pixels.w) / 2;
+    const hH = @intToFloat(f32, pixels.h) / 2;
+
+    // center in viewport
+    out.x = hW * out.y + hW;
+    out.x = hH * -out.y + hH;
+    return out;
 }
 
 ///
-pub fn applyPixelShader(mvp:*Mat44f, pixel:Vec4f, color:Vec4f ) Vec4f 
-{
-  return color;
+pub fn applyPixelShader(mvp: *Mat44f, pixel: Vec4f, color: Vec4f) Vec4f {
+    return color;
+}
+
+pub fn drawPoint(mvp: *Mat44f, point:Vec4f, color:Vec4f) void {
+  const px = applyVertexShader(mvp, 0, point);
+  const pc = applyPixelShader(mvp, px, color);
+
+
+  const c = Color.init(
+    @floatToInt(u8, pc.x * 255),
+    @floatToInt(u8, pc.y * 255), 
+    @floatToInt(u8, pc.z * 255), 
+    @floatToInt(u8, pc.w * 255)
+    );
+
+  writePixel(@floatToInt(i16, px.x), @floatToInt(i16, px.y), c);
 }
 
 /// Render triangle to frame buffer
-pub fn drawTri(mvp:*Mat44f, offset:u16, mesh:*Mesh) void
-{
-  const rv0 = mesh.vertexBuffer[mesh.indexBuffer[offset + 0]];
-  const rv1 = mesh.vertexBuffer[mesh.indexBuffer[offset + 1]];
-  const rv2 = mesh.vertexBuffer[mesh.indexBuffer[offset + 2]];
+pub fn drawTri(mvp: *Mat44f, offset: u16, mesh: *Mesh) void {
+    const rv0 = mesh.vertexBuffer[mesh.indexBuffer[offset + 0]];
+    const rv1 = mesh.vertexBuffer[mesh.indexBuffer[offset + 1]];
+    const rv2 = mesh.vertexBuffer[mesh.indexBuffer[offset + 2]];
 
-  const v0 = applyVertexShader(mvp, offset + 0, rv0);
-  const v1 = applyVertexShader(mvp, offset + 1, rv1);
-  const v2 = applyVertexShader(mvp, offset + 2, rv2);
+    const v0 = applyVertexShader(mvp, offset + 0, rv0);
+    const v1 = applyVertexShader(mvp, offset + 1, rv1);
+    const v2 = applyVertexShader(mvp, offset + 2, rv2);
 
-  const c0 = mesh.colorBuffer[mesh.indexBuffer[offset + 0]];
-  const c1 = mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
-  const c2 = mesh.colorBuffer[mesh.indexBuffer[offset + 2]];
+    const c0 = mesh.colorBuffer[mesh.indexBuffer[offset + 0]];
+    const c1 = mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
+    const c2 = mesh.colorBuffer[mesh.indexBuffer[offset + 2]];
 
-  const area = triEdge(v0, v1, v2);
+    const area = triEdge(v0, v1, v2);
 
-  const renderBounds = Bounds.init(
-    Vec4f.init(0,0,0,0), 
-    Vec4f.init(@intToFloat(f32, pixels.w), @intToFloat(f32, pixels.h), 0, 0));
+    if(area <= 0)
+      return;
 
-  var bounds = Bounds.init(v0, v0);
-  bounds.add(v0);
-  bounds.add(v1);
-  bounds.add(v2);
-  bounds.limit(renderBounds);
+    const renderBounds = Bounds.init(Vec4f.init(0, 0, 0, 0), Vec4f.init(@intToFloat(f32, pixels.w), @intToFloat(f32, pixels.h), 0, 0));
 
-  const subsamples:u8 = 1;
-  const stepDist:f32 = 1.0/ @intToFloat(f32, subsamples*subsamples);
+    var bounds = Bounds.init(v0, v0);
+    bounds.add(v0);
+    bounds.add(v1);
+    bounds.add(v2);
+    bounds.limit(renderBounds);
 
+    const subsamples: u8 = 1;
+    const stepDist: f32 = 1.0 / @intToFloat(f32, subsamples * subsamples);
 
-  // iterate triangle bounding box drawing all pixels inside the triangle
-  // TODO: iterate tri edge vertically rendering scan lines to the opposite edge
-  var y = bounds.min.y;
-  var p:Vec4f = Vec4f.init(0,0,0,0);
-  var fbc:Vec4f = Vec4f.init(0,0,0,0);
-  var c:Color = Color.black();
+    // iterate triangle bounding box drawing all pixels inside the triangle
+    // TODO: iterate tri edge vertically rendering scan lines to the opposite edge
+    var y = bounds.min.y;
+    var p: Vec4f = Vec4f.init(0, 0, 0, 0);
+    var fbc: Vec4f = Vec4f.init(0, 0, 0, 0);
+    var c: Color = Color.black();
 
-  while(y <= bounds.max.y)
-  {
-    var x = bounds.min.x;
-    while(x <= bounds.max.x)
-    {
-      p.x = x;// + stepDist; // sub sampling
-      p.y = y;// + stepDist; // sub sampling
+    while (y <= bounds.max.y) {
+        var x = bounds.min.x;
+        defer y += 1;
 
-      var w0 = triEdge(v1, v2, p);
-      var w1 = triEdge(v2, v0, p);
-      var w2 = triEdge(v0, v1, p);
+        while (x <= bounds.max.x) {
+            defer x += 1;
+            p.x = x; // + stepDist; // sub sampling
+            p.y = y; // + stepDist; // sub sampling
 
-      if (w0 >= 0 and w1 >= 0 and w2 >= 0)
-      {
-        w0 /= area;
-        w1 /= area;
-        w2 /= area;
+            var w0 = triEdge(v1, v2, p);
+            var w1 = triEdge(v2, v0, p);
+            var w2 = triEdge(v0, v1, p);
 
-        // if we use perspective correct interpolation we need to
-        // multiply the result of this interpolation by z, the depth
-        // of the point on the 3D triangle that the pixel overlaps.
-        const z = 1 / (w0 * v0.z + w1 * v1.z + w2 * v2.z);
+            // TODO: near plane clipping
 
-        // interpolate vertex colors across all pixels
+            if (w0 < 0 or w1 < 0 or w2 < 0)
+              continue;
+
+            w0 /= area;
+            w1 /= area;
+            w2 /= area;
+
+            // if we use perspective correct interpolation we need to
+            // multiply the result of this interpolation by z, the depth
+            // of the point on the 3D triangle that the pixel overlaps.
+            const z = 1 / (w0 * v0.z + w1 * v1.z + w2 * v2.z);
+
+            // interpolate vertex colors across all pixels
+
+            fbc.x = 1.0;//(w0 * c0.x + w1 * c1.x + w2 * c2.x);// * z;
+            fbc.y = 1.0;//(w0 * c0.y + w1 * c1.y + w2 * c2.y);// * z;
+            fbc.z = 0.5;//(w0 * c0.z + w1 * c1.z + w2 * c2.z);// * z;
+            fbc.w = 1.0;
+
+            const vc = applyPixelShader(mvp, p, fbc);
+
+            c.setR(@floatToInt(u8, vc.x * 255));
+            c.setG(@floatToInt(u8, vc.y * 255));
+            c.setB(@floatToInt(u8, vc.z * 255));
+            c.setA(@floatToInt(u8, vc.w * 255));
+
+            writePixel(@floatToInt(i16, x), @floatToInt(i16, y), c);
+            
+        }
         
-        fbc.x = (w0 * c0.x + w1 * c1.x + w2 * c2.x) * z;
-        fbc.y = (w0 * c0.y + w1 * c1.y + w2 * c2.y) * z;
-        fbc.z = (w0 * c0.z + w1 * c1.z + w2 * c2.z) * z;
-        fbc.w = 1.0;
-
-        const vc = applyPixelShader(mvp, p, fbc);
-
-        c.setR(@floatToInt(u8, vc.x * 255));
-        c.setG(@floatToInt(u8, vc.y * 255));
-        c.setB(@floatToInt(u8, vc.z * 255));
-        c.setA(@floatToInt(u8, vc.w * 255));
-
-        writePixel(@floatToInt(i16,x),@floatToInt(i16,y),c);
-      }
-      x+=1;
     }
-    y+=1;
-  }
 }
 
-pub fn writePixel(x:i16, y:i16, c:Color) void
-{
-  pixels.write( x, y, c);
+pub fn writePixel(x: i16, y: i16, c: Color) void {
+    pixels.write(x, y, c);
 }
 
-pub fn beginFrame() *u8
-{
-  pixels.clearFront(Color.black());
-  return pixels.bufferStart();
+pub fn beginFrame() *u8 {
+    pixels.clearFront(Color.black());
+    return pixels.bufferStart();
 }
 
-pub fn endFrame() void 
-{
-  pixels.swapBuffers();
+pub fn endFrame() void {
+    pixels.swapBuffers();
 }
 
-pub fn shutdown() void
-{
-
-}
+pub fn shutdown() void {}

@@ -111,7 +111,7 @@ pub fn endUpdate() void
     if(dtInt < targetDt)
         c.SDL_Delay((targetDt - dtInt)-1);
 
-    std.debug.warn("dt:{} ms\n", .{dtInt});
+    //std.debug.warn("dt:{} ms\n", .{dtInt});
     // else {
     //     dt = 0.001 * @intToFloat(f32, t1 - t0);
     // }

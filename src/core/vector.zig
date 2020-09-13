@@ -18,14 +18,9 @@ pub const Vec4f = struct {
     };
   }
 
-  // TODO: look up overloading...
-  // pub inline fn set(self:*Vec4f, x:f32, y:f32, z:f32, w:f32) void 
-  // {
-  //   self.x = x;
-  //   self.y = y;
-  //   self.z = z;
-  //   self.w = w;
-  // }
+  pub fn zero() Vec4f{
+    return Vec4f.init(0,0,0,0);
+  }
 
   pub inline fn set(self:*Vec4f, other:Vec4f) void 
   {
@@ -59,12 +54,12 @@ pub const Vec4f = struct {
     self.w /= scalar;
   }
 
-  pub inline fn dot3(self:*Vec4f, other:Vec4f) f32 
+  pub inline fn dot3(self:Vec4f, other:Vec4f) f32 
   {
     return self.x*other.x + self.y*other.y + self.z*other.z;
   }
 
-  pub inline fn dot(self:*Vec4f, other:Vec4f) f32 
+  pub inline fn dot(self:Vec4f, other:Vec4f) f32 
   {
     return self.x*other.x 
          + self.y*other.y 
@@ -72,7 +67,7 @@ pub const Vec4f = struct {
          + self.w*other.w;
   }
 
-  pub inline fn cross3(self:*Vec4f, other:Vec4f) Vec4f {
+  pub inline fn cross3(self:Vec4f, other:Vec4f) Vec4f {
     return Vec4f.init(
       self.y * other.y - self.z * other.y,
       self.z * other.x - self.x * other.z,
@@ -111,6 +106,10 @@ pub const Vec4f = struct {
       self.z / len,
       self.w / len
     );
+  }
+
+  pub fn print(self:Vec4f) void {
+    std.debug.warn("[{}, {}, {}, {} ]\n", .{self.x, self.y, self.z, self.w});      
   }
 };
 
