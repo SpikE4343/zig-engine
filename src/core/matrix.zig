@@ -14,11 +14,57 @@ pub const Mat44f = struct {
         self.mm = values;
     }
 
+    pub inline fn copy(self: *Mat44f, other: Mat44f) void {
+        self.mm[0] = other.mm[0];
+        self.mm[1] = other.mm[1];
+        self.mm[2] = other.mm[2];
+        self.mm[3] = other.mm[3];
+    }
+
     pub inline fn identity() Mat44f {
         return Mat44f{
             .mm = [4]Vec4f{
                 Vec4f.init(1, 0, 0, 0),
                 Vec4f.init(0, 1, 0, 0),
+                Vec4f.init(0, 0, 1, 0),
+                Vec4f.init(0, 0, 0, 1),
+            },
+        };
+    }
+
+    pub inline fn rotX(radAngle:f32) Mat44f {
+        const cosA = math.cos(radAngle);
+        const sinA = math.sin(radAngle);
+        return Mat44f{
+            .mm = [4]Vec4f{
+                Vec4f.init(1, 0, 0, 0),
+                Vec4f.init(0, cosA, -sinA, 0),
+                Vec4f.init(0, sinA, cosA, 0),
+                Vec4f.init(0, 0, 0, 1),
+            },
+        };
+    }
+
+    pub inline fn rotY(radAngle:f32) Mat44f {
+        const cosA = math.cos(radAngle);
+        const sinA = math.sin(radAngle);
+        return Mat44f{
+            .mm = [4]Vec4f{
+                Vec4f.init(cosA, 0, sinA, 0),
+                Vec4f.init(0, 1, 0, 0),
+                Vec4f.init(-sinA, 0, cosA, 0),
+                Vec4f.init(0, 0, 0, 1),
+            },
+        };
+    }
+
+    pub inline fn rotZ(radAngle:f32) Mat44f {
+        const cosA = math.cos(radAngle);
+        const sinA = math.sin(radAngle);
+        return Mat44f{
+            .mm = [4]Vec4f{
+                Vec4f.init(cosA, -sinA, 0, 0),
+                Vec4f.init(sinA, cosA, 0, 0),
                 Vec4f.init(0, 0, 1, 0),
                 Vec4f.init(0, 0, 0, 1),
             },
@@ -46,17 +92,38 @@ pub const Mat44f = struct {
     }
 
     pub inline fn mul(self: *Mat44f, other: Mat44f) void {
-        for(self.mm) | row, i| {
-            self.mm[i].x = row.dot(other.col(0));
-            self.mm[i].y = row.dot(other.col(1));
-            self.mm[i].z = row.dot(other.col(2));
-            self.mm[i].w = row.dot(other.col(3));
-        }
+
+        self.mm = [4]Vec4f{
+          Vec4f.init(
+            self.mm[0].dot(other.col(0)),
+            self.mm[0].dot(other.col(1)),
+            self.mm[0].dot(other.col(2)),
+            self.mm[0].dot(other.col(3))
+            ),
+          Vec4f.init(
+            self.mm[1].dot(other.col(0)),
+            self.mm[1].dot(other.col(1)),
+            self.mm[1].dot(other.col(2)),
+            self.mm[1].dot(other.col(3))
+            ),
+          Vec4f.init(
+            self.mm[2].dot(other.col(0)),
+            self.mm[2].dot(other.col(1)),
+            self.mm[2].dot(other.col(2)),
+            self.mm[2].dot(other.col(3))
+            ),
+          Vec4f.init(
+            self.mm[3].dot(other.col(0)),
+            self.mm[3].dot(other.col(1)),
+            self.mm[3].dot(other.col(2)),
+            self.mm[3].dot(other.col(3))
+            ),
+        };
     }
 
-    pub inline fn mul33(self: *Mat44f, v: Vec4f) Vec4f {
-        const invW = 1.0; // / self.mm[3].dot(v);
-        return Vec4f.init(self.mm[0].dot(v) * invW, self.mm[1].dot(v) * invW, self.mm[2].dot(v) * invW, 0);
+    pub inline fn mul33(self: *const Mat44f, v: Vec4f) Vec4f {
+        const invW = 1.0 / self.mm[3].dot(v);
+        return Vec4f.init(self.mm[0].dot(v) * invW, self.mm[1].dot(v) * invW, self.mm[2].dot(v) * invW, v.w);
     }
 
     pub fn createPerspective(fovy: f32, aspect: f32, nearZ: f32, farZ: f32) Mat44f {
@@ -98,8 +165,8 @@ pub const Mat44f = struct {
         self.mul(tmp);
     }
 
-    pub fn print(self:*Mat44f) void {
-        std.debug.warn("[\n",.{});
+    pub fn print(self:Mat44f) void {
+        std.debug.warn("\n[\n",.{});
         self.mm[0].print();
         self.mm[1].print();
         self.mm[2].print();
@@ -109,26 +176,32 @@ pub const Mat44f = struct {
 };
 
 test "Mat44f.mul" {
-    const lhs = Vec4f.init(1.0, 2.0, 3.0, 1.0);
-    const v = lhs;
-    //const mat = Mat44f.init([0.0]f32 ** (4*4));
+    var a = Mat44f.identity();
+    const b = Mat44f.identity();
 
-    assert_f32_equal(lhs.x, 1.0);
-    assert_f32_equal(lhs.y, 2.0);
-    assert_f32_equal(lhs.z, 3.0);
-    assert_f32_equal(lhs.w, 1.0);
+    std.debug.warn("\na:", .{});
+    a.print();
+
+    std.debug.warn("\nb:", .{});
+    b.print();
+
+    a.mul(b);
+
+    std.debug.warn("\na result:", .{});
+    a.print();
 }
 
 test "Mat44f.translate" {
-    const lhs = Vec4f.init(0.0, 0.0, 1.0, 1.0);
+    const lhs = Vec4f.init(2.0, 2.0, 2.0, 1.0);
     var model = Mat44f.identity();
 
     model.print();
     model.translate(lhs);
     model.print();
 
-    const origin = model.mul_vec4(Vec4f.zero());
-
+    const origin = model.mul_vec4(Vec4f.init(0,0,0,1));
+    lhs.print();
+    origin.print();
     //const mat = Mat44f.init([0.0]f32 ** (4*4));
 
     assert_f32_equal(lhs.x, origin.x);

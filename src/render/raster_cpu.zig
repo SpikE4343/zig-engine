@@ -5,6 +5,7 @@ const std = @import("std");
 const warn = std.debug.warn;
 const fmt = std.fmt;
 const assert = @import("std").debug.assert;
+const math = std.math;
 
 const Vec4f = @import("../core/vector.zig").Vec4f;
 const Mat44f = @import("../core/matrix.zig").Mat44f;
@@ -50,6 +51,15 @@ pub const Color = struct {
 
     pub fn init(cr: u8, cg: u8, cb: u8, ca: u8) Color {
         return Color{ .color = [4]u8{ cr, cg, cb, ca } };
+    }
+
+    pub fn fromNormal(cr: f32, cg:f32, cb:f32, ca:f32) Color {
+      return init( 
+        @floatToInt(u8, cr*255),
+        @floatToInt(u8, cg*255),
+        @floatToInt(u8, cb*255),
+        @floatToInt(u8, ca*255)
+      );
     }
 };
 
@@ -360,6 +370,10 @@ const Bounds = struct {
 
 var pixels: PixelBuffers = undefined;
 
+pub fn drawLine(xFrom: c_int, yFrom: c_int, xTo: c_int, yTo: c_int, color: Color) void {
+  pixels.drawLine(xFrom, yFrom, xTo, yTo, color);
+}
+
 pub fn bufferStart() *u8 {
     return pixels.bufferStart();
 }
@@ -372,7 +386,7 @@ pub fn init(renderWidth: u16, renderHeight: u16) !void {
     pixels.init(renderWidth, renderHeight);
 }
 
-pub fn drawMesh(mvp: *Mat44f, mesh: *Mesh) void {
+pub fn drawMesh(mvp: *const Mat44f, mesh: *Mesh) void {
     const ids = mesh.indexBuffer.len;
     const numTris = ids / 3;
 
@@ -383,11 +397,11 @@ pub fn drawMesh(mvp: *Mat44f, mesh: *Mesh) void {
     }
 }
 
-pub fn drawPointMesh(mvp: *Mat44f, mesh: *Mesh) void {
+pub fn drawPointMesh(mvp: *const Mat44f, mesh: *Mesh) void {
     const ids = mesh.vertexBuffer.len;
 
-    for(mesh.vertexBuffer) |vertex, i| {
-      drawPoint(mvp, vertex, mesh.colorBuffer[i]);
+    for (mesh.vertexBuffer) |vertex, i| {
+        drawPoint(mvp, vertex, mesh.colorBuffer[i]);
     }
 }
 
@@ -395,39 +409,33 @@ pub fn triEdge(a: Vec4f, b: Vec4f, c: Vec4f) f32 {
     return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
 }
 
-pub fn applyVertexShader(mvp: *Mat44f, index: u16, v: Vec4f) Vec4f {
+pub fn applyVertexShader(mvp: *const Mat44f, index: u16, v: Vec4f) Vec4f {
     var out = mvp.mul33(v);
     const hW = @intToFloat(f32, pixels.w) / 2;
     const hH = @intToFloat(f32, pixels.h) / 2;
 
     // center in viewport
-    out.x = hW * out.y + hW;
-    out.x = hH * -out.y + hH;
+    out.x = hW * out.x + hW;
+    out.y = hH * -out.y + hH;
     return out;
 }
 
 ///
-pub fn applyPixelShader(mvp: *Mat44f, pixel: Vec4f, color: Vec4f) Vec4f {
+pub fn applyPixelShader(mvp: *const Mat44f, pixel: Vec4f, color: Vec4f) Vec4f {
     return color;
 }
 
-pub fn drawPoint(mvp: *Mat44f, point:Vec4f, color:Vec4f) void {
-  const px = applyVertexShader(mvp, 0, point);
-  const pc = applyPixelShader(mvp, px, color);
+pub fn drawPoint(mvp: *const Mat44f, point: Vec4f, color: Vec4f) void {
+    const px = applyVertexShader(mvp, 0, point);
+    const pc = applyPixelShader(mvp, px, color);
 
+    const c = Color.init(@floatToInt(u8, pc.x * 255), @floatToInt(u8, pc.y * 255), @floatToInt(u8, pc.z * 255), @floatToInt(u8, pc.w * 255));
 
-  const c = Color.init(
-    @floatToInt(u8, pc.x * 255),
-    @floatToInt(u8, pc.y * 255), 
-    @floatToInt(u8, pc.z * 255), 
-    @floatToInt(u8, pc.w * 255)
-    );
-
-  writePixel(@floatToInt(i16, px.x), @floatToInt(i16, px.y), c);
+    writePixel(@floatToInt(i16, px.x), @floatToInt(i16, px.y), c);
 }
 
 /// Render triangle to frame buffer
-pub fn drawTri(mvp: *Mat44f, offset: u16, mesh: *Mesh) void {
+pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
     const rv0 = mesh.vertexBuffer[mesh.indexBuffer[offset + 0]];
     const rv1 = mesh.vertexBuffer[mesh.indexBuffer[offset + 1]];
     const rv2 = mesh.vertexBuffer[mesh.indexBuffer[offset + 2]];
@@ -442,10 +450,16 @@ pub fn drawTri(mvp: *Mat44f, offset: u16, mesh: *Mesh) void {
 
     const area = triEdge(v0, v1, v2);
 
-    if(area <= 0)
-      return;
+    if (area <= 0)
+        return;
 
-    const renderBounds = Bounds.init(Vec4f.init(0, 0, 0, 0), Vec4f.init(@intToFloat(f32, pixels.w), @intToFloat(f32, pixels.h), 0, 0));
+    const renderBounds = Bounds.init(
+      Vec4f.init(0, 0, 0, 0), 
+      Vec4f.init(
+        @intToFloat(f32, pixels.w), 
+        @intToFloat(f32, pixels.h), 
+        0, 0)
+      );
 
     var bounds = Bounds.init(v0, v0);
     bounds.add(v0);
@@ -453,8 +467,8 @@ pub fn drawTri(mvp: *Mat44f, offset: u16, mesh: *Mesh) void {
     bounds.add(v2);
     bounds.limit(renderBounds);
 
-    const subsamples: u8 = 1;
-    const stepDist: f32 = 1.0 / @intToFloat(f32, subsamples * subsamples);
+    var subsamples: u16 =1;
+    var stepDist: f32 = 1.0 / @intToFloat(f32, subsamples * subsamples);
 
     // iterate triangle bounding box drawing all pixels inside the triangle
     // TODO: iterate tri edge vertically rendering scan lines to the opposite edge
@@ -469,45 +483,65 @@ pub fn drawTri(mvp: *Mat44f, offset: u16, mesh: *Mesh) void {
 
         while (x <= bounds.max.x) {
             defer x += 1;
-            p.x = x; // + stepDist; // sub sampling
-            p.y = y; // + stepDist; // sub sampling
 
-            var w0 = triEdge(v1, v2, p);
-            var w1 = triEdge(v2, v0, p);
-            var w2 = triEdge(v0, v1, p);
+            var sx: f32 = 0;
+            var sy: f32 = 0;
+            var vc: Vec4f = Vec4f.init(0, 0, 0, 0);
 
-            // TODO: near plane clipping
+            p.x = x; // sub sampling
+            p.y = y; // sub sampling
 
-            if (w0 < 0 or w1 < 0 or w2 < 0)
+            while (@floatToInt(u32, sy) < subsamples) {
+                defer sy += 1;
+
+                while (@floatToInt(u32, sx) < subsamples) {
+                    defer sx += 1;
+
+                    p.x = x + stepDist * (sx + 1); // sub sampling
+                    p.y = y + stepDist * (sy + 1); // sub sampling
+
+                    var w0 = triEdge(v1, v2, p);
+                    var w1 = triEdge(v2, v0, p);
+                    var w2 = triEdge(v0, v1, p);
+
+                    // TODO: near plane clipping
+
+                    if (w0 < 0 or w1 < 0 or w2 < 0)
+                        continue;
+
+                 
+                    w0 /= area;
+                    w1 /= area;
+                    w2 /= area;
+
+                    // if we use perspective correct interpolation we need to
+                    // multiply the result of this interpolation by z, the depth
+                    // of the point on the 3D triangle that the pixel overlaps.
+                    const z = 1 / (w0 * v0.z + w1 * v1.z + w2 * v2.z);
+
+                    // interpolate vertex colors across all pixels
+                    fbc.x = (w0 * c0.x + w1 * c1.x + w2 * c2.x) * z;
+                    fbc.y = (w0 * c0.y + w1 * c1.y + w2 * c2.y) * z;
+                    fbc.z = (w0 * c0.z + w1 * c1.z + w2 * c2.z) * z;
+                    fbc.w = 1.0;
+
+                    vc.add(applyPixelShader(mvp, p, fbc));
+                }
+            }
+
+            if(vc.w <= 0.0)
               continue;
+            
+            vc.normalize();
+            vc.scale(255);
 
-            w0 /= area;
-            w1 /= area;
-            w2 /= area;
-
-            // if we use perspective correct interpolation we need to
-            // multiply the result of this interpolation by z, the depth
-            // of the point on the 3D triangle that the pixel overlaps.
-            const z = 1 / (w0 * v0.z + w1 * v1.z + w2 * v2.z);
-
-            // interpolate vertex colors across all pixels
-
-            fbc.x = 1.0;//(w0 * c0.x + w1 * c1.x + w2 * c2.x);// * z;
-            fbc.y = 1.0;//(w0 * c0.y + w1 * c1.y + w2 * c2.y);// * z;
-            fbc.z = 0.5;//(w0 * c0.z + w1 * c1.z + w2 * c2.z);// * z;
-            fbc.w = 1.0;
-
-            const vc = applyPixelShader(mvp, p, fbc);
-
-            c.setR(@floatToInt(u8, vc.x * 255));
-            c.setG(@floatToInt(u8, vc.y * 255));
-            c.setB(@floatToInt(u8, vc.z * 255));
-            c.setA(@floatToInt(u8, vc.w * 255));
+            c.setR(@floatToInt(u8, @fabs(vc.x)));
+            c.setG(@floatToInt(u8, @fabs(vc.y)));
+            c.setB(@floatToInt(u8, @fabs(vc.z)));
+            c.setA(@floatToInt(u8, @fabs(vc.w)));
 
             writePixel(@floatToInt(i16, x), @floatToInt(i16, y), c);
-            
         }
-        
     }
 }
 
