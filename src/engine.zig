@@ -3,6 +3,7 @@ const std = @import("std");
 const fmt = std.fmt;
 const warn = std.debug.warn;
 const assert = std.debug.assert;
+const Timer = std.time.Timer;
 
 // engine imports
 const sys = @import("system/sys_sdl.zig");
@@ -48,19 +49,29 @@ var cubeTris = [_]u16{
 
 // colors
 var cubeColors = [_]Vec4f{
-    Vec4f.init(0.1, 0.7, 0.3, 1.0), // 0
+    Vec4f.init(0.1, 1, 0.3, 1.0), // 0
     Vec4f.init(0.1, 0.3, 0.8, 1.0), // 1
     Vec4f.init(0.5, 0.8, 0.2, 1.0), // 2
-    Vec4f.init(0.1, 0.2, 0.65, 1.0), // 3
+    Vec4f.init(0.1, 0.2, 1, 1.0), // 3
 
     Vec4f.init(1.0, 0.5, 0.33, 1.0), // 4
     Vec4f.init(0.1, 0.45, 0.27, 1.0), // 5
-    Vec4f.init(0.8, 0.5, 0.64, 1.0), // 6
-    Vec4f.init(0.1, 0.3, 0.11, 1.0), // 7
+    Vec4f.init(1.0, 0.5, 1, 1.0), // 6
+    Vec4f.init(0.1, 1, 0.11, 1.0), // 7
 };
 
 fn createCube() render.Mesh {
     return render.Mesh.init(cubeVerts[0..], cubeTris[0..], cubeColors[0..]);
+}
+
+fn drawProgress(x:i16, y:i16, value:f32, max:f32) void {
+  const cs = std.math.clamp(value, 0.0, max)/max;
+  render.drawLine(
+    x,y,
+    @floatToInt(c_int, cs* @intToFloat(f32,renderWidth)/4), 
+    y, 
+    render.Color.fromNormal(cs, 1-cs, 0.2, 1)
+  );
 }
 
 const moveSpeed = 0.1;
@@ -79,11 +90,16 @@ pub fn main() !void {
     var projMat = Mat44f.createPerspective(65, @intToFloat(f32, renderWidth) / @intToFloat(f32, renderHeight), 0.1, 2000);
     var modelMat = Mat44f.identity();
     var viewMat = Mat44f.identity();
-    var frameTime:i32 = 0;
+    var frameTime:u64 = 0;
 
     viewMat.translate(Vec4f.init(0, 0, -10, 1));
 
+    var frameTimer = try Timer.start();
+    var renderTimer = try Timer.start();
+    const targetFrameTimeNs = @intToFloat(f32, sys.targetFrameTimeMs() * 1_000_000);
+
     while (!quit) {
+        frameTimer.reset();
         quit = !sys.beginUpdate();
         if (input.isKeyDown(input.KeyCode.ESCAPE))
             quit = true;
@@ -94,10 +110,8 @@ pub fn main() !void {
             var temp = Mat44f.identity();
 
             const depth = (input.keyStateFloat(input.KeyCode.W) - input.keyStateFloat(input.KeyCode.S)) * moveSpeed;
-
             const horizontal = (input.keyStateFloat(input.KeyCode.A) - input.keyStateFloat(input.KeyCode.D)) * moveSpeed;
-
-            const vertical = (input.keyStateFloat(input.KeyCode.UP) - input.keyStateFloat(input.KeyCode.DOWN)) * moveSpeed;
+            const vertical = (input.keyStateFloat(input.KeyCode.DOWN) - input.keyStateFloat(input.KeyCode.UP)) * moveSpeed;
 
             viewMat.translate(Vec4f.init(horizontal, vertical, depth, 0));
 
@@ -116,23 +130,19 @@ pub fn main() !void {
             mvp.copy(projMat);
             mvp.mul(temp);
 
-
+            const renderStart = frameTimer.read();
+            renderTimer.reset();
             render.drawMesh(&mvp, &mesh);
+            const renderTime = renderTimer.lap();
 
-            const s = @intToFloat(f32,frameTime) / @intToFloat(f32, sys.targetFrameTime());
-            if(s > 0.0){
-              const cs = std.math.min(s, 1.0);
-              render.drawLine(
-                0,2,
-                @floatToInt(c_int, cs* @intToFloat(f32,renderWidth)/4), 
-                2, 
-                render.Color.fromNormal(cs, 1-cs, 0.2, 1)
-              );
-            }
+            drawProgress( 0,2, @intToFloat(f32,frameTime), targetFrameTimeNs);
+            drawProgress( 0,4, @intToFloat(f32,renderTime), targetFrameTimeNs);
+
         }
         render.endFrame();
 
         sys.updateRenderTexture(b, bufferLineSize);
-        frameTime += (@intCast(i32, sys.endUpdate())-frameTime) >> 2;
+        frameTime = frameTimer.lap();
+        _=sys.endUpdate();
     }
 }

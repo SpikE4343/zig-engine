@@ -57,7 +57,7 @@ pub fn init(windowWidth: u16, windowHeight: u16, renderWidth: u16, renderHeight:
     renderTexture = c.SDL_CreateTexture(renderer, c.SDL_PIXELFORMAT_ABGR8888, c.SDL_TEXTUREACCESS_STATIC, @intCast(c_int, renderWidth), @intCast(c_int, renderHeight));
 }
 
-pub inline fn targetFrameTime() u32 {
+pub inline fn targetFrameTimeMs() u32 {
   return targetDt;
 }
 
