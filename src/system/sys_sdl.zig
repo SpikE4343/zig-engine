@@ -21,7 +21,7 @@ const SDL_INIT_EVERYTHING = c.SDL_INIT_TIMER |
 
 const INIT_WIDTH = 800;
 const INIT_HEIGHT = 600;
-pub const maxFps = 60;
+pub const maxFps = 10;
 const targetDt = 1000 / maxFps;
 
 var t0: u32 = 0;

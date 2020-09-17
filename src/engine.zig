@@ -11,7 +11,7 @@ const Mat44f = @import("core/matrix.zig").Mat44f;
 const Vec4f = @import("core/vector.zig").Vec4f;
 const render = @import("render/raster_cpu.zig");
 const input = @import("system/sys_input.zig");
-const Profile = @import("core/profiler.zig").ThreadProfile;
+const Profile = @import("core/profiler.zig").Profile;
 const Sampler = @import("core/profiler.zig").Sampler;
 
 
@@ -80,10 +80,14 @@ fn drawProgress(x:i16, y:i16, value:f32, max:f32) void {
 const moveSpeed = 0.1;
 
 pub fn main() !void {
+
+    var profiler = Profile.init();
+    profiler.nextFrame();
+
     try sys.init(windowWidth, windowHeight, renderWidth, renderHeight);
     defer sys.shutdown();
 
-    try render.init(renderWidth, renderHeight);
+    try render.init(renderWidth, renderHeight, &profiler);
     defer render.shutdown();
 
     const bufferLineSize = render.bufferLineSize();
@@ -101,7 +105,7 @@ pub fn main() !void {
     var renderTimer = try Timer.start();
     const targetFrameTimeNs = @intToFloat(f32, sys.targetFrameTimeMs() * 1_000_000);
 
-    var profiler = Profile.init();
+    
 
     while (!quit) {
         frameTimer.reset();
@@ -167,7 +171,7 @@ pub fn main() !void {
             frameTime = frameTimer.lap();
             _=sys.endUpdate();
         }
-        profiler.print();
-        profiler.reset();
+        try profiler.print();
+        profiler.nextFrame();
     }
 }

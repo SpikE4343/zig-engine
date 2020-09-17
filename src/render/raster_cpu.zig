@@ -10,6 +10,8 @@ const math = std.math;
 const Vec4f = @import("../core/vector.zig").Vec4f;
 const Mat44f = @import("../core/matrix.zig").Mat44f;
 
+const Profile = @import("../core/profiler.zig").Profile;
+
 /// RGBA 32 bit color value
 pub const Color = struct {
     color: [4]u8 = [4]u8{ 0, 0, 0, 0 },
@@ -101,8 +103,9 @@ pub const Mesh = struct {
     }
 };
 
+// TODO: allocate from heap
 const PixelBuffers = struct {
-    const pixelsCapacity = 4000 * 4000;
+    const pixelsCapacity = 800 * 600;
     buffers: [2][pixelsCapacity]Color,
     frontIndex: usize,
     w: usize,
@@ -369,6 +372,7 @@ const Bounds = struct {
 };
 
 var pixels: PixelBuffers = undefined;
+var profile: ?*Profile = undefined;
 
 pub fn drawLine(xFrom: c_int, yFrom: c_int, xTo: c_int, yTo: c_int, color: Color) void {
   pixels.drawLine(xFrom, yFrom, xTo, yTo, color);
@@ -382,11 +386,15 @@ pub fn bufferLineSize() usize {
     return pixels.bufferLineSize();
 }
 
-pub fn init(renderWidth: u16, renderHeight: u16) !void {
+pub fn init(renderWidth: u16, renderHeight: u16, profileContext:?*Profile) !void {
+    profile = profileContext;
     pixels.init(renderWidth, renderHeight);
 }
 
 pub fn drawMesh(mvp: *const Mat44f, mesh: *Mesh) void {
+    var sp = profile.?.beginSample("drawMesh");
+    defer profile.?.endSample(sp);
+
     const ids = mesh.indexBuffer.len;
     const numTris = ids / 3;
 
@@ -436,6 +444,9 @@ pub fn drawPoint(mvp: *const Mat44f, point: Vec4f, color: Vec4f) void {
 
 /// Render triangle to frame buffer
 pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
+    var sp = profile.?.beginSample("drawTri");
+    defer profile.?.endSample(sp);
+
     const rv0 = mesh.vertexBuffer[mesh.indexBuffer[offset + 0]];
     const rv1 = mesh.vertexBuffer[mesh.indexBuffer[offset + 1]];
     const rv2 = mesh.vertexBuffer[mesh.indexBuffer[offset + 2]];
@@ -497,6 +508,8 @@ pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
                 while (@floatToInt(u32, sx) < subsamples) {
                     defer sx += 1;
 
+                    
+
                     p.x = x + stepDist * (sx + 1); // sub sampling
                     p.y = y + stepDist * (sy + 1); // sub sampling
 
@@ -509,6 +522,8 @@ pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
                     if (w0 < 0 or w1 < 0 or w2 < 0)
                         continue;
 
+                    var spp = profile.?.beginSample("samplePixel");
+                    defer profile.?.endSample(spp);
                  
                     w0 /= area;
                     w1 /= area;
