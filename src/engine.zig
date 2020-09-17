@@ -97,14 +97,11 @@ pub fn main() !void {
     var projMat = Mat44f.createPerspective(65, @intToFloat(f32, renderWidth) / @intToFloat(f32, renderHeight), 0.1, 2000);
     var modelMat = Mat44f.identity();
     var viewMat = Mat44f.identity();
-    var frameTime:u64 = 0;
 
     viewMat.translate(Vec4f.init(0, 0, -10, 1));
 
-    var frameTimer = try Timer.start();
-    var renderTimer = try Timer.start();
     const targetFrameTimeNs = @intToFloat(f32, sys.targetFrameTimeMs() * 1_000_000);
-
+    var stdout = std.io.getStdOut().outStream();
     
 
     while (!quit) {
@@ -117,10 +114,9 @@ pub fn main() !void {
             var c = Sampler.begin(&profiler, "main");
             defer c.end();
 
-            const b = render.beginFrame();
+            
             {
-                
-
+              
                 var mvp = Mat44f.identity();
                 var temp = Mat44f.identity();
                 
@@ -169,9 +165,9 @@ pub fn main() !void {
 
             sys.updateRenderTexture(b, bufferLineSize);
             frameTime = frameTimer.lap();
-            _=sys.endUpdate();
+            _= sys.endUpdate();
         }
-        try profiler.print();
+        try profiler.streamPrint(stdout);
         profiler.nextFrame();
     }
 }

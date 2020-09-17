@@ -70,9 +70,8 @@ pub const Profile = struct {
     self.frameStartTime = timer.start_time;
   }
 
-  pub fn print(self:*Profile) !void {
-    var stdout = std.io.getStdOut().outStream();
-    try stdout.print("f:{}, sc:{}\n", .{self.frameCount, self.nextSample});
+  pub fn streamPrint(self:*Profile, stream:*OutStream ) !void {
+    try stream.print("f:{}, sc:{}\n", .{self.frameCount, self.nextSample});
 
     for(self.samples) |sample, i| 
     {
@@ -82,13 +81,13 @@ pub const Profile = struct {
       var s = sample.depth;
       while(s > 0) 
       {
-        try stdout.print(" ", .{});
+        try stream.print(" ", .{});
         s -= 1;
       }
       
       const begin = sample.begin - self.frameStartTime;
       const end = sample.end - self.frameStartTime;
-      try stdout.print("[{}:{}] b:{} ns, e:{} ns, d:{} ns, t:{}\n", .{
+      try stdstreamout.print("[{}:{}] b:{} ns, e:{} ns, d:{} ns, t:{}\n", .{
         i,
         sample.depth, 
         begin, 
