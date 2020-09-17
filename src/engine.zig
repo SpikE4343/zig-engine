@@ -101,73 +101,71 @@ pub fn main() !void {
     viewMat.translate(Vec4f.init(0, 0, -10, 1));
 
     const targetFrameTimeNs = @intToFloat(f32, sys.targetFrameTimeMs() * 1_000_000);
-    var stdout = std.io.getStdOut().outStream();
+    var stdout = std.io.getStdOut();
     
+    while (!quit) 
+    {
+      quit = !sys.beginUpdate();
+      if (input.isKeyDown(input.KeyCode.ESCAPE))
+          quit = true;
 
-    while (!quit) {
-        frameTimer.reset();
-        quit = !sys.beginUpdate();
-        if (input.isKeyDown(input.KeyCode.ESCAPE))
-            quit = true;
-
-        {
-            var c = Sampler.begin(&profiler, "main");
-            defer c.end();
-
-            
-            {
+      {
+          var c = Sampler.begin(&profiler, "main");
+          defer c.end();
+          const b = render.beginFrame();
+          {
+              var mvp = Mat44f.identity();
+              var temp = Mat44f.identity();
               
-                var mvp = Mat44f.identity();
-                var temp = Mat44f.identity();
-                
-                {
-                    var sinput = Sampler.begin(&profiler,"input");
-                    defer sinput.end();
+              {
+                  var sinput = Sampler.begin(&profiler,"input");
+                  defer sinput.end();
 
-                    const depth = (input.keyStateFloat(input.KeyCode.W) - input.keyStateFloat(input.KeyCode.S)) * moveSpeed;
-                    const horizontal = (input.keyStateFloat(input.KeyCode.A) - input.keyStateFloat(input.KeyCode.D)) * moveSpeed;
-                    const vertical = (input.keyStateFloat(input.KeyCode.DOWN) - input.keyStateFloat(input.KeyCode.UP)) * moveSpeed;
-                
-                    viewMat.translate(Vec4f.init(horizontal, vertical, depth, 0));
+                  const depth = (input.keyStateFloat(input.KeyCode.W) - input.keyStateFloat(input.KeyCode.S)) * moveSpeed;
+                  const horizontal = (input.keyStateFloat(input.KeyCode.A) - input.keyStateFloat(input.KeyCode.D)) * moveSpeed;
+                  const vertical = (input.keyStateFloat(input.KeyCode.DOWN) - input.keyStateFloat(input.KeyCode.UP)) * moveSpeed;
+              
+                  viewMat.translate(Vec4f.init(horizontal, vertical, depth, 0));
 
-                    //modelMat.mul(Mat44f.rotX(0.01));
-                    //modelMat.mul(Mat44f.rotY(-0.02));
-                    //modelMat.mul(Mat44f.rotZ(0.001));
+                  //modelMat.mul(Mat44f.rotX(0.01));
+                  //modelMat.mul(Mat44f.rotY(-0.02));
+                  //modelMat.mul(Mat44f.rotZ(0.001));
 
-                    temp.copy(viewMat);
-                    //std.debug.warn("temp:\n", .{});
-                    //temp.print();
+                  temp.copy(viewMat);
+                  //std.debug.warn("temp:\n", .{});
+                  //temp.print();
 
-                    temp.mul(modelMat);
-                    //std.debug.warn("view*model:\n", .{});
-                    //temp.print();
+                  temp.mul(modelMat);
+                  //std.debug.warn("view*model:\n", .{});
+                  //temp.print();
 
-                    mvp.copy(projMat);
-                    mvp.mul(temp);
-                }
+                  mvp.copy(projMat);
+                  mvp.mul(temp);
+              }
 
-                {
-                    var srender = Sampler.begin(&profiler,"draw");
-                    defer srender.end();
 
-                    const renderStart = frameTimer.read();
-                    renderTimer.reset();
-                    render.drawMesh(&mvp, &mesh);
-                    
-                }
+              {
+                  var srenderDraw = Sampler.begin(&profiler,"draw");
+                  defer srenderDraw.end();
 
-                const renderTime = renderTimer.lap();    
-                drawProgress( 0,2, @intToFloat(f32,frameTime), targetFrameTimeNs);
-                drawProgress( 0,4, @intToFloat(f32,renderTime), targetFrameTimeNs);
+                  // const renderStart = frameTimer.read();
+                  // renderTimer.reset();
+                  render.drawMesh(&mvp, &mesh);
+                  
+              }
 
-            }
-            render.endFrame();
+              // const renderTime = renderTimer.lap();    
+              // drawProgress( 0,2, @intToFloat(f32,frameTime), targetFrameTimeNs);
+              // drawProgress( 0,4, @intToFloat(f32,renderTime), targetFrameTimeNs);
 
-            sys.updateRenderTexture(b, bufferLineSize);
-            frameTime = frameTimer.lap();
-            _= sys.endUpdate();
-        }
-        try profiler.streamPrint(stdout);
-        profiler.nextFrame();
+          }
+          render.endFrame();
+
+          sys.updateRenderTexture(b, bufferLineSize);
+          // frameTime = frameTimer.lap();
+          _= sys.endUpdate();
+      }
+      try profiler.streamPrint(stdout);
+      profiler.nextFrame();
     }
 }

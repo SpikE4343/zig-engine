@@ -43,6 +43,8 @@ Write a software rendering engine and explore some zig at the same time.
 
 ### Rendering
   - [x] Basic triangle and mesh rasterizer
+  - [ ] Depth Buffer
+  - [ ] Backface culling
   - [ ] Wrap render buffer
   - [ ] Shaders
   - [ ] Texture Mapping

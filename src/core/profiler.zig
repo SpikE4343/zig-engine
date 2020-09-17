@@ -3,6 +3,7 @@ const math = std.math;
 const assert = std.debug.assert;
 const Thread = std.Thread;
 const Timer = std.time.Timer;
+const File = std.fs.File;
 
 // TODO: make these parameters compile time, like generics
 const SamplePoolCount = 2048;
@@ -70,7 +71,8 @@ pub const Profile = struct {
     self.frameStartTime = timer.start_time;
   }
 
-  pub fn streamPrint(self:*Profile, stream:*OutStream ) !void {
+  pub fn streamPrint(self:*Profile, file:File ) !void {
+    var stream = file.outStream();
     try stream.print("f:{}, sc:{}\n", .{self.frameCount, self.nextSample});
 
     for(self.samples) |sample, i| 
@@ -87,7 +89,7 @@ pub const Profile = struct {
       
       const begin = sample.begin - self.frameStartTime;
       const end = sample.end - self.frameStartTime;
-      try stdstreamout.print("[{}:{}] b:{} ns, e:{} ns, d:{} ns, t:{}\n", .{
+      try stream.print("[{}:{}] b:{} ns, e:{} ns, d:{} ns, t:{}\n", .{
         i,
         sample.depth, 
         begin, 
