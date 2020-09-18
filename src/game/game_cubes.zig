@@ -3,35 +3,22 @@ const std = @import("std");
 const fmt = std.fmt;
 const warn = std.debug.warn;
 const assert = std.debug.assert;
-const Timer = std.time.Timer;
 
 // engine imports
-const sys = @import("system/sys_sdl.zig");
-const Mat44f = @import("core/matrix.zig").Mat44f;
-const Vec4f = @import("core/vector.zig").Vec4f;
-const render = @import("render/raster_cpu.zig");
-const input = @import("system/sys_input.zig");
-const Profile = @import("core/profiler.zig").Profile;
-const Sampler = @import("core/profiler.zig").Sampler;
-
-
-const windowWidth: u16 = 1024;
-const windowHeight: u16 = 768;
-
-const renderWidth: u16 = 320;
-const renderHeight: u16 = 240;
+const engine = @import("../engine.zig");
+const input = engine.input;
 
 const w = 1;
-var cubeVerts = [_]Vec4f{
-    Vec4f.init(w, w, -w, 1.0), // 0
-    Vec4f.init(w, -w, -w, 1.0), // 1
-    Vec4f.init(w, w, w, 1.0), // 2
-    Vec4f.init(w, -w, w, 1.0), // 3
+var cubeVerts = [_]engine.Vec4f{
+    engine.Vec4f.init(w, w, -w, 1.0), // 0
+    engine.Vec4f.init(w, -w, -w, 1.0), // 1
+    engine.Vec4f.init(w, w, w, 1.0), // 2
+    engine.Vec4f.init(w, -w, w, 1.0), // 3
 
-    Vec4f.init(-w, w, -w, 1.0), // 4
-    Vec4f.init(-w, -w, -w, 1.0), // 5
-    Vec4f.init(-w, w, w, 1.0), // 6
-    Vec4f.init(-w, -w, w, 1.0), // 7
+    engine.Vec4f.init(-w, w, -w, 1.0), // 4
+    engine.Vec4f.init(-w, -w, -w, 1.0), // 5
+    engine.Vec4f.init(-w, w, w, 1.0), // 6
+    engine.Vec4f.init(-w, -w, w, 1.0), // 7
 };
 
 // indicies
@@ -51,53 +38,66 @@ var cubeTris = [_]u16{
 };
 
 // colors
-var cubeColors = [_]Vec4f{
-    Vec4f.init(0.1, 1, 0.3, 1.0), // 0
-    Vec4f.init(0.1, 0.3, 0.8, 1.0), // 1
-    Vec4f.init(0.5, 0.8, 0.2, 1.0), // 2
-    Vec4f.init(0.1, 0.2, 1, 1.0), // 3
+var cubeColors = [_]engine.Vec4f{
+    engine.Vec4f.init(0.1, 1, 0.3, 1.0), // 0
+    engine.Vec4f.init(0.1, 0.3, 0.8, 1.0), // 1
+    engine.Vec4f.init(0.5, 0.8, 0.2, 1.0), // 2
+    engine.Vec4f.init(0.1, 0.2, 1, 1.0), // 3
 
-    Vec4f.init(1.0, 0.5, 0.33, 1.0), // 4
-    Vec4f.init(0.1, 0.45, 0.27, 1.0), // 5
-    Vec4f.init(1.0, 0.5, 1, 1.0), // 6
-    Vec4f.init(0.1, 1, 0.11, 1.0), // 7
+    engine.Vec4f.init(1.0, 0.5, 0.33, 1.0), // 4
+    engine.Vec4f.init(0.1, 0.45, 0.27, 1.0), // 5
+    engine.Vec4f.init(1.0, 0.5, 1, 1.0), // 6
+    engine.Vec4f.init(0.1, 1, 0.11, 1.0), // 7
 };
 
-fn init() !void {
+var modelMat = engine.Mat44f.identity();
+var viewMat = engine.Mat44f.identity();
+var mesh = createCube();
+var projMat:engine.Mat44f = undefined; 
 
+
+pub fn init() !void {
+    projMat = engine.Mat44f.createPerspective(
+        65, 
+        @intToFloat(f32, engine.renderWidth) / @intToFloat(f32, engine.renderHeight), 
+        0.1, 
+        2000
+        );
 }
 
-fn shutdown() !void {
+pub fn shutdown() !void {
     
 }
 
-fn createCube() render.Mesh {
-    return render.Mesh.init(cubeVerts[0..], cubeTris[0..], cubeColors[0..]);
+fn createCube() engine.render.Mesh {
+    return engine.render.Mesh.init(cubeVerts[0..], cubeTris[0..], cubeColors[0..]);
 }
 
+fn drawProgress(x:i16, y:i16, value:f32, max:f32) void {
+  const cs = std.math.clamp(value, 0.0, max)/max;
+  render.drawLine(
+    x,y,
+    @floatToInt(c_int, cs* @intToFloat(f32,renderWidth)/4), 
+    y, 
+    render.Color.fromNormal(cs, 1-cs, 0.2, 1)
+  );
+}
 
 const moveSpeed = 0.1;
 
-pub fn update() !bool 
+pub fn update() bool 
 {   
-    var quit = false;
-    var mesh = createCube();
-    var projMat = Mat44f.createPerspective(65, @intToFloat(f32, renderWidth) / @intToFloat(f32, renderHeight), 0.1, 2000);
-    var modelMat = Mat44f.identity();
-    var viewMat = Mat44f.identity();
-
-
     if (input.isKeyDown(input.KeyCode.ESCAPE))
         return false;
 
-    var mvp = Mat44f.identity();
-    var temp = Mat44f.identity();
+    var mvp = engine.Mat44f.identity();
+    var temp = engine.Mat44f.identity();
 
     const depth = (input.keyStateFloat(input.KeyCode.W) - input.keyStateFloat(input.KeyCode.S)) * moveSpeed;
     const horizontal = (input.keyStateFloat(input.KeyCode.A) - input.keyStateFloat(input.KeyCode.D)) * moveSpeed;
     const vertical = (input.keyStateFloat(input.KeyCode.DOWN) - input.keyStateFloat(input.KeyCode.UP)) * moveSpeed;
 
-    viewMat.translate(Vec4f.init(horizontal, vertical, depth, 0));
+    viewMat.translate(engine.Vec4f.init(horizontal, vertical, depth, 0));
 
     //modelMat.mul(Mat44f.rotX(0.01));
     //modelMat.mul(Mat44f.rotY(-0.02));
@@ -113,4 +113,16 @@ pub fn update() !bool
 
     mvp.copy(projMat);
     mvp.mul(temp);
+
+    {
+        // var srenderDraw = engine.Sampler.begin(&engine.profiler,"draw.mesh");
+        // defer srenderDraw.end();
+
+        // const renderStart = frameTimer.read();
+        // renderTimer.reset();
+        engine.render.drawMesh(&mvp, &mesh);
+        
+    }
+
+    return true;
 }
