@@ -99,6 +99,30 @@ pub const Profile = struct {
       });
     }
   }
+
+  pub fn dumpStreamText(self:*Profile, file:File ) !void {
+    var stream = file.outStream();
+    try stream.print("Frame, Frame Start, Id, Depth, Begin ns, End ns, Exec ns, tag\n", .{});
+
+    for(self.samples) |sample, i| 
+    {
+      if( i == 0 or sample.begin == 0)
+        continue;
+      
+      const begin = sample.begin - self.frameStartTime;
+      const end = sample.end - self.frameStartTime;
+      try stream.print("{}, {}, {}, {}, {}, {}, {}, {}\n", .{
+        self.frameCount,
+        self.frameStartTime,
+        i,
+        sample.depth, 
+        sample.begin, 
+        sample.end, 
+        end-begin,
+        sample.tag
+      });
+    }
+  }
 };
 
 pub const Sampler = struct {

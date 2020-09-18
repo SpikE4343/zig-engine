@@ -165,7 +165,7 @@ pub fn main() !void {
           // frameTime = frameTimer.lap();
           _= sys.endUpdate();
       }
-      try profiler.streamPrint(stdout);
+      //try profiler.dumpStreamText(stdout);
       profiler.nextFrame();
     }
 }
