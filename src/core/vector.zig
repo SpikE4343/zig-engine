@@ -22,6 +22,14 @@ pub const Vec4f = struct {
     return Vec4f.init(0,0,0,0);
   }
 
+  pub fn one() Vec4f{
+    return Vec4f.init(1,1,1,1);
+  }
+
+  pub fn half() Vec4f{
+    return Vec4f.init(0.5,0.5,0.5,0.5);
+  }
+
   pub inline fn set(self:*Vec4f, other:Vec4f) void 
   {
     self.x = other.x;
@@ -44,6 +52,16 @@ pub const Vec4f = struct {
     self.y *= scalar;
     self.z *= scalar;
     self.w *= scalar;
+  }
+
+  pub inline fn scaleDup(self:Vec4f, scalar:f32) Vec4f 
+  {
+    return Vec4f.init(
+      self.x * scalar,
+      self.y * scalar,
+      self.z * scalar,
+      self.w * scalar
+    );
   }
 
   pub inline fn div(self:*Vec4f, scalar:f32) void 
@@ -71,7 +89,8 @@ pub const Vec4f = struct {
     return Vec4f.init(
       self.y * other.y - self.z * other.y,
       self.z * other.x - self.x * other.z,
-      self.x * other.y - self.y * other.x
+      self.x * other.y - self.y * other.x,
+      0
     );
   }
 
@@ -106,6 +125,24 @@ pub const Vec4f = struct {
       self.z / len,
       self.w / len
     );
+  }
+
+  pub inline fn clamp01(self:*Vec4f) void {
+    self.clamp(0.0, 1.0);
+  }
+
+  pub inline fn clamp(self:*Vec4f, min:f32, max:f32) void {
+    self.x = math.clamp(self.x, min, max);
+    self.y = math.clamp(self.y, min, max);
+    self.z = math.clamp(self.z, min, max);
+    self.w = math.clamp(self.w, min, max);
+  }
+
+  pub inline fn ceil(self:*Vec4f) void {
+    self.x = math.ceil(self.x);
+    self.y = math.ceil(self.y);
+    self.z = math.ceil(self.z);
+    self.w = math.ceil(self.w);
   }
 
   pub fn print(self:Vec4f) void {

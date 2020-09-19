@@ -121,7 +121,31 @@ pub const Mat44f = struct {
         };
     }
 
-    pub inline fn mul33(self: *const Mat44f, v: Vec4f) Vec4f {
+    pub inline fn mul33(self: *Mat44f, other: Mat44f) void {
+
+        self.mm = [4]Vec4f{
+          Vec4f.init(
+            self.mm[0].dot(other.col(0)),
+            self.mm[0].dot(other.col(1)),
+            self.mm[0].dot(other.col(2)),
+            0
+            ),
+          Vec4f.init(
+            self.mm[1].dot(other.col(0)),
+            self.mm[1].dot(other.col(1)),
+            self.mm[1].dot(other.col(2)),
+            0
+            ),
+          Vec4f.init(
+            self.mm[2].dot(other.col(0)),
+            self.mm[2].dot(other.col(1)),
+            self.mm[2].dot(other.col(2)),
+            0),
+          self.mm[3],
+        };
+    }
+
+    pub inline fn mul33_vec4(self: *const Mat44f, v: Vec4f) Vec4f {
         const invW = 1.0 / self.mm[3].dot(v);
         return Vec4f.init(self.mm[0].dot(v) * invW, self.mm[1].dot(v) * invW, self.mm[2].dot(v) * invW, v.w);
     }

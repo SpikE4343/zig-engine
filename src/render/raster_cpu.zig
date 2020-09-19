@@ -369,6 +369,14 @@ const Bounds = struct {
         if (self.max.w > l.max.w)
             self.max.w = l.max.w;
     }
+
+    pub fn topLeftHandLimit(self:*Bounds) void {
+        self.min.sub(Vec4f.half());
+        self.min.ceil();
+
+        self.max.sub(Vec4f.half());
+        self.max.ceil();
+    }
 };
 
 var pixels: PixelBuffers = undefined;
@@ -391,7 +399,7 @@ pub fn init(renderWidth: u16, renderHeight: u16, profileContext:?*Profile) !void
     pixels.init(renderWidth, renderHeight);
 }
 
-pub fn drawMesh(mvp: *const Mat44f, mesh: *Mesh) void {
+pub fn drawMesh(mv: *const Mat44f, mvp: *const Mat44f, mesh: *Mesh) void {
     var sp = profile.?.beginSample("render.mesh.draw");
     defer profile.?.endSample(sp);
 
@@ -400,7 +408,7 @@ pub fn drawMesh(mvp: *const Mat44f, mesh: *Mesh) void {
 
     var t: u16 = 0;
     while (t < ids) {
-        drawTri(mvp, t, mesh);
+        drawTri(mv, mvp, t, mesh);
         t += 3;
     }
 }
@@ -418,7 +426,7 @@ pub fn triEdge(a: Vec4f, b: Vec4f, c: Vec4f) f32 {
 }
 
 pub fn applyVertexShader(mvp: *const Mat44f, index: u16, v: Vec4f) Vec4f {
-    var out = mvp.mul33(v);
+    var out = mvp.mul33_vec4(v);
     const hW = @intToFloat(f32, pixels.w) / 2;
     const hH = @intToFloat(f32, pixels.h) / 2;
 
@@ -430,7 +438,7 @@ pub fn applyVertexShader(mvp: *const Mat44f, index: u16, v: Vec4f) Vec4f {
 
 ///
 pub fn applyPixelShader(mvp: *const Mat44f, pixel: Vec4f, color: Vec4f) Vec4f {
-    return color;
+    return color.scaleDup(1);
 }
 
 pub fn drawPoint(mvp: *const Mat44f, point: Vec4f, color: Vec4f) void {
@@ -443,13 +451,30 @@ pub fn drawPoint(mvp: *const Mat44f, point: Vec4f, color: Vec4f) void {
 }
 
 /// Render triangle to frame buffer
-pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
+pub fn drawTri(mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
     var sp = profile.?.beginSample("render.mesh.draw.tri");
     defer profile.?.endSample(sp);
 
     const rv0 = mesh.vertexBuffer[mesh.indexBuffer[offset + 0]];
     const rv1 = mesh.vertexBuffer[mesh.indexBuffer[offset + 1]];
     const rv2 = mesh.vertexBuffer[mesh.indexBuffer[offset + 2]];
+
+    // cull back facing triangles
+
+    const mv0 = mv.mul33_vec4(rv0);
+    const mv1 = mv.mul33_vec4(rv1);
+    const mv2 = mv.mul33_vec4(rv2);
+    
+    var e0 = mv1;
+    var e1 = mv2;
+    
+    e0.sub(mv0);// cull back facing triangles
+    e1.sub(mv0);
+
+    const triNormal = e0.cross3(e1);
+    const bfc = triNormal.dot(mv0);
+    if( bfc > 0.0000000000001)
+        return;
 
     const v0 = applyVertexShader(mvp, offset + 0, rv0);
     const v1 = applyVertexShader(mvp, offset + 1, rv1);
@@ -458,6 +483,10 @@ pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
     const c0 = mesh.colorBuffer[mesh.indexBuffer[offset + 0]];
     const c1 = mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
     const c2 = mesh.colorBuffer[mesh.indexBuffer[offset + 2]];
+
+
+    // TODO: backface cull
+
 
     const area = triEdge(v0, v1, v2);
 
@@ -477,9 +506,11 @@ pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
     bounds.add(v1);
     bounds.add(v2);
     bounds.limit(renderBounds);
+    bounds.topLeftHandLimit();
 
-    var subsamples: u16 =1;
-    var stepDist: f32 = 1.0 / @intToFloat(f32, subsamples * subsamples);
+
+    // var subsamples: u16 =1;
+    // var stepDist: f32 = 1.0 / @intToFloat(f32, math.max(2, subsamples));
 
     // iterate triangle bounding box drawing all pixels inside the triangle
     // TODO: iterate tri edge vertically rendering scan lines to the opposite edge
@@ -488,6 +519,7 @@ pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
     var fbc: Vec4f = Vec4f.init(0, 0, 0, 0);
     var c: Color = Color.black();
 
+
     while (y <= bounds.max.y) {
         var x = bounds.min.x;
         defer y += 1;
@@ -495,23 +527,23 @@ pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
         while (x <= bounds.max.x) {
             defer x += 1;
 
-            var sx: f32 = 0;
-            var sy: f32 = 0;
+            // var sx: f32 = 0;
+            // var sy: f32 = 0;
             var vc: Vec4f = Vec4f.init(0, 0, 0, 0);
 
-            p.x = x; // sub sampling
-            p.y = y; // sub sampling
+            p.x = x; 
+            p.y = y; 
 
-            while (@floatToInt(u32, sy) < subsamples) {
-                defer sy += 1;
+            // while (@floatToInt(u32, sy) < subsamples) {
+            //     defer sy += 1;
 
-                while (@floatToInt(u32, sx) < subsamples) {
-                    defer sx += 1;
+            //     while (@floatToInt(u32, sx) < subsamples) {
+            //         defer sx += 1;
 
                     
 
-                    p.x = x + stepDist * (sx + 1); // sub sampling
-                    p.y = y + stepDist * (sy + 1); // sub sampling
+            //         p.x = x + stepDist * (sx + 1); // sub sampling
+            //         p.y = y + stepDist * (sy + 1); // sub sampling
 
                     var w0 = triEdge(v1, v2, p);
                     var w1 = triEdge(v2, v0, p);
@@ -532,7 +564,7 @@ pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
                     // if we use perspective correct interpolation we need to
                     // multiply the result of this interpolation by z, the depth
                     // of the point on the 3D triangle that the pixel overlaps.
-                    const z = 1 / (w0 * v0.z + w1 * v1.z + w2 * v2.z);
+                    const z = 1.0 / (w0 * v0.z + w1 * v1.z + w2 * v2.z);
 
                     // interpolate vertex colors across all pixels
                     fbc.x = (w0 * c0.x + w1 * c1.x + w2 * c2.x) * z;
@@ -540,14 +572,16 @@ pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
                     fbc.z = (w0 * c0.z + w1 * c1.z + w2 * c2.z) * z;
                     fbc.w = 1.0;
 
-                    vc.add(applyPixelShader(mvp, p, fbc));
-                }
-            }
+                    // vc.add(applyPixelShader(mvp, p, fbc));
+                    vc = applyPixelShader(mvp, p, fbc);
+            //     }
+            // }
 
             if(vc.w <= 0.0)
               continue;
             
-            vc.normalize();
+            // vc.scale(1.0/@intToFloat(f32, subsamples*subsamples));
+            vc.clamp01();
             vc.scale(255);
 
             c.setR(@floatToInt(u8, @fabs(vc.x)));

@@ -91,28 +91,35 @@ pub fn update() bool
         return false;
 
     var mvp = engine.Mat44f.identity();
-    var temp = engine.Mat44f.identity();
+    var mv = engine.Mat44f.identity();
 
     const depth = (input.keyStateFloat(input.KeyCode.W) - input.keyStateFloat(input.KeyCode.S)) * moveSpeed;
     const horizontal = (input.keyStateFloat(input.KeyCode.A) - input.keyStateFloat(input.KeyCode.D)) * moveSpeed;
     const vertical = (input.keyStateFloat(input.KeyCode.DOWN) - input.keyStateFloat(input.KeyCode.UP)) * moveSpeed;
 
+    const rot = (input.keyStateFloat(input.KeyCode.Q) - input.keyStateFloat(input.KeyCode.E)) * moveSpeed;
+
     viewMat.translate(engine.Vec4f.init(horizontal, vertical, depth, 0));
 
+    _=engine.sys.showMouseCursor(~input.getMouseRight());
+
+    viewMat.mul(engine.Mat44f.rotY(0.001 * @intToFloat(f32, input.getMouseRight()) * @intToFloat(f32,input.getMouseX()) ));
+
+
     //modelMat.mul(Mat44f.rotX(0.01));
-    //modelMat.mul(Mat44f.rotY(-0.02));
+    //modelMat.mul(engine.Mat44f.rotY(rot));
     //modelMat.mul(Mat44f.rotZ(0.001));
 
-    temp.copy(viewMat);
+    mv.copy(viewMat);
     //std.debug.warn("temp:\n", .{});
     //temp.print();
 
-    temp.mul(modelMat);
+    mv.mul(modelMat);
     //std.debug.warn("view*model:\n", .{});
     //temp.print();
 
     mvp.copy(projMat);
-    mvp.mul(temp);
+    mvp.mul(mv);
 
     {
         // var srenderDraw = engine.Sampler.begin(&engine.profiler,"draw.mesh");
@@ -120,7 +127,7 @@ pub fn update() bool
 
         // const renderStart = frameTimer.read();
         // renderTimer.reset();
-        engine.render.drawMesh(&mvp, &mesh);
+        engine.render.drawMesh(&mv, &mvp, &mesh);
         
     }
 

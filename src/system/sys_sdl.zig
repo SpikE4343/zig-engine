@@ -88,6 +88,10 @@ pub fn init(cfg:Config) !void
       );
 }
 
+pub fn showMouseCursor(show:u1) u1 {
+  return @intCast(u1, c.SDL_ShowCursor(@intCast(c_int, show)));
+}
+
 pub inline fn targetFrameTimeMs() u32 {
   return config.targetDt();
 }
@@ -137,6 +141,14 @@ pub fn beginUpdate() bool
             c.SDL_MOUSEMOTION => 
             {
               input.setMousePos(event.motion.x, event.motion.y);
+            },
+
+            c.SDL_MOUSEBUTTONDOWN => {
+              input.setMouseButton(event.button.button, 1);
+            },
+
+            c.SDL_MOUSEBUTTONUP => {
+              input.setMouseButton(event.button.button, 0);
             },
 
             else => {},

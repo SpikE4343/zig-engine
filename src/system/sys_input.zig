@@ -1,12 +1,50 @@
 
-var mouseX:i32 = 0;
-var mouseY:i32 = 0;
+
+pub const MouseState = struct {
+  x: i32,
+  y: i32,
+
+  left:u1,
+  right:u1
+};
+
+
+var mouseState = MouseState {
+  .x=0,
+  .y = 0,
+  .left = 0,
+  .right = 0
+};
+
 
 pub fn setMousePos(x:i32, y:i32) void {
-  mouseX = x;
-  mouseY = y;
+  mouseState.x = x;
+  mouseState.y = y;
 }
 
+pub fn setMouseButton(button:u32, state:u1) void {
+  switch(button) {
+    0 => { mouseState.left = state;},
+    3 => { mouseState.right = state;},
+    else =>{}
+  }
+}
+
+pub fn getMouseX() i32 {
+  return mouseState.x;
+}
+
+pub fn getMouseY() i32 {
+  return mouseState.x;
+}
+
+pub fn getMouseLeft() u1 {
+  return mouseState.left;
+}
+
+pub fn getMouseRight() u1 {
+  return mouseState.right;
+}
 
 
 pub const KeyCode = enum(u16)
