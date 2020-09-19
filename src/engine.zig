@@ -19,21 +19,23 @@ pub const Sampler = @import("core/profiler.zig").Sampler;
 pub var stdout = std.io.getStdOut();
 
 
-pub const windowWidth: u16 = 1024;
-pub const windowHeight: u16 = 768;
-
-pub const renderWidth: u16 = 320;
-pub const renderHeight: u16 = 240;
+pub const systemConfig = sys.Config{
+  .windowWidth = 1024,
+  .windowHeight = 768,
+  .renderWidth = 320,
+  .renderHeight = 240,
+  .maxFps = 60,
+};
 
 pub fn main() !void {
 
     var profiler = Profile.init();
     profiler.nextFrame();
 
-    try sys.init(windowWidth, windowHeight, renderWidth, renderHeight);
+    try sys.init(systemConfig);
     defer sys.shutdown();
 
-    try render.init(renderWidth, renderHeight, &profiler);
+    try render.init(systemConfig.renderWidth, systemConfig.renderHeight, &profiler);
     defer render.shutdown();
 
     const bufferLineSize = render.bufferLineSize();
@@ -59,7 +61,8 @@ pub fn main() !void {
             {
                 var c = Sampler.begin(&profiler, "game.update");
                 defer c.end();
-                quit = quit or !game.update();
+                if(!game.update())
+                  return;
             }
             render.endFrame();
 
@@ -68,6 +71,13 @@ pub fn main() !void {
                 defer srt.end();
 
                 sys.updateRenderTexture(b, bufferLineSize);
+                sys.renderPresent();
+            }
+
+            {
+                var sup = Sampler.begin(&profiler, "system.wait");
+                defer sup.end();
+
                 _= sys.endUpdate();
             }
         }

@@ -9,10 +9,10 @@ Write a software rendering engine and explore some zig at the same time.
 
 # Tasks
   
-  ### Debug
+### Debug
   - [ ] Server, host and support commands and debug data streaming
 
-  ### Profiler
+### Profiler
   - [x] Simple wallclock based profiler intended to be used for inspecting large sections like:
     * UI
     * Game
@@ -43,6 +43,8 @@ Write a software rendering engine and explore some zig at the same time.
 
 ### Rendering
   - [x] Basic triangle and mesh rasterizer
+  - [ ] Text Rendering
+  - [ ] Ui Render texture different from world
   - [ ] Depth Buffer
   - [ ] Backface culling
   - [ ] Wrap render buffer

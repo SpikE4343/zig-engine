@@ -59,7 +59,7 @@ var projMat:engine.Mat44f = undefined;
 pub fn init() !void {
     projMat = engine.Mat44f.createPerspective(
         65, 
-        @intToFloat(f32, engine.renderWidth) / @intToFloat(f32, engine.renderHeight), 
+        @intToFloat(f32, engine.systemConfig.renderWidth) / @intToFloat(f32, engine.systemConfig.renderHeight), 
         0.1, 
         2000
         );

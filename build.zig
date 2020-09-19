@@ -4,7 +4,7 @@ const Builder = std.build.Builder;
 pub fn build(b: *Builder) void {
     //const mode = b.standardReleaseOptions();
     const exe = b.addExecutable("zngine", "src/engine.zig");
-    exe.setBuildMode(std.builtin.Mode.Debug);
+    //exe.setBuildMode(std.builtin.Mode.Debug);
     exe.linkSystemLibrary("SDL2");
     exe.linkSystemLibrary("c");
 
