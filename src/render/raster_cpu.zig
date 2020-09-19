@@ -392,8 +392,8 @@ pub fn init(renderWidth: u16, renderHeight: u16, profileContext:?*Profile) !void
 }
 
 pub fn drawMesh(mvp: *const Mat44f, mesh: *Mesh) void {
-    // var sp = profile.?.beginSample("drawMesh");
-    // defer profile.?.endSample(sp);
+    var sp = profile.?.beginSample("render.mesh.draw");
+    defer profile.?.endSample(sp);
 
     const ids = mesh.indexBuffer.len;
     const numTris = ids / 3;
@@ -444,8 +444,8 @@ pub fn drawPoint(mvp: *const Mat44f, point: Vec4f, color: Vec4f) void {
 
 /// Render triangle to frame buffer
 pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
-    // var sp = profile.?.beginSample("drawTri");
-    // defer profile.?.endSample(sp);
+    var sp = profile.?.beginSample("render.mesh.draw.tri");
+    defer profile.?.endSample(sp);
 
     const rv0 = mesh.vertexBuffer[mesh.indexBuffer[offset + 0]];
     const rv1 = mesh.vertexBuffer[mesh.indexBuffer[offset + 1]];
@@ -522,7 +522,7 @@ pub fn drawTri(mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
                     if (w0 < 0 or w1 < 0 or w2 < 0)
                         continue;
 
-                    // var spp = profile.?.beginSample("samplePixel");
+                    // var spp = profile.?.beginSample("render.mesh.draw.tri.pixel");
                     // defer profile.?.endSample(spp);
                  
                     w0 /= area;

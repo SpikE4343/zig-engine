@@ -33,7 +33,7 @@ pub fn main() !void {
     try sys.init(windowWidth, windowHeight, renderWidth, renderHeight);
     defer sys.shutdown();
 
-    try render.init(renderWidth, renderHeight, undefined);
+    try render.init(renderWidth, renderHeight, &profiler);
     defer render.shutdown();
 
     const bufferLineSize = render.bufferLineSize();
@@ -66,13 +66,13 @@ pub fn main() !void {
             {
                 var srt = Sampler.begin(&profiler, "system.render.present");
                 defer srt.end();
-                
+
                 sys.updateRenderTexture(b, bufferLineSize);
                 _= sys.endUpdate();
             }
         }
 
-      try profiler.streamPrint(stdout);
-      profiler.nextFrame();
+        try profiler.streamPrint(stdout);
+        profiler.nextFrame();
     }
 }
