@@ -30,6 +30,18 @@ pub const Vec4f = struct {
     return Vec4f.init(0.5,0.5,0.5,0.5);
   }
 
+  pub fn forward() Vec4f{
+    return Vec4f.init(0,0,1,1);
+  }
+
+  pub fn up() Vec4f{
+    return Vec4f.init(0,1,0,1);
+  }
+
+  pub fn right() Vec4f{
+    return Vec4f.init(1,0,0,1);
+  }
+
   pub inline fn set(self:*Vec4f, other:Vec4f) void 
   {
     self.x = other.x;
@@ -46,6 +58,45 @@ pub const Vec4f = struct {
     self.w += other.w;
   }
 
+  pub inline fn addScalar(self:*Vec4f, scalar:f32) void 
+  {
+    self.x += scalar;
+    self.y += scalar;
+    self.z += scalar;
+    self.w += scalar;
+  }
+
+  pub inline fn addScalarDup(self:Vec4f, scalar:f32) Vec4f 
+  {
+    var out = self;
+    out.addScalar(scalar);
+    return out;
+  }
+
+  pub inline fn addDup(self:Vec4f, other:Vec4f) Vec4f
+  {
+    var out = self;
+    out.add(other);
+    return out;
+  }
+
+  pub inline fn mul(self:*Vec4f, other:Vec4f) void 
+  {
+      self.x *= other.x;
+      self.y *= other.y;
+      self.z *= other.z;
+      self.w *= other.w;
+  }
+
+  pub inline fn mulDup(self:Vec4f, other:Vec4f) Vec4f 
+  {
+    return Vec4f.init(
+      self.x * other.x,
+      self.y * other.y,
+      self.z * other.z,
+      self.w * other.w);
+  }
+
   pub inline fn scale(self:*Vec4f, scalar:f32) void 
   {
     self.x *= scalar;
@@ -56,12 +107,9 @@ pub const Vec4f = struct {
 
   pub inline fn scaleDup(self:Vec4f, scalar:f32) Vec4f 
   {
-    return Vec4f.init(
-      self.x * scalar,
-      self.y * scalar,
-      self.z * scalar,
-      self.w * scalar
-    );
+    var out = self;
+    out.scale(scalar);
+    return out;
   }
 
   pub inline fn div(self:*Vec4f, scalar:f32) void 
@@ -70,6 +118,28 @@ pub const Vec4f = struct {
     self.y /= scalar;
     self.z /= scalar;
     self.w /= scalar;
+  }
+
+  pub inline fn divDup(self:Vec4f, scalar:f32) Vec4f 
+  {
+    var out = self;
+    out.div(scalar);
+    return out;
+  }
+
+  pub inline fn divVec(self:*Vec4f, other:Vec4f) void 
+  {
+    self.x /= other.x;
+    self.y /= other.y;
+    self.z /= other.z;
+    self.w /= other.w;
+  }
+
+  pub inline fn divVecDup(self:Vec4f, other:Vec4f) Vec4f 
+  {
+    var out = self;
+    out.divVec(other);
+    return out;
   }
 
   pub inline fn dot3(self:Vec4f, other:Vec4f) f32 
@@ -99,6 +169,13 @@ pub const Vec4f = struct {
     self.y -= other.y;
     self.z -= other.z;
     self.w -= other.w;
+  }
+
+  pub inline fn subScalar(self:*Vec4f, scalar:f32) void {
+    self.x -= scalar;
+    self.y -= scalar;
+    self.z -= scalar;
+    self.w -= scalar;
   }
 
   /// Returns vector length

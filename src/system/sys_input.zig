@@ -35,7 +35,7 @@ pub fn getMouseX() i32 {
 }
 
 pub fn getMouseY() i32 {
-  return mouseState.x;
+  return mouseState.y;
 }
 
 pub fn getMouseLeft() u1 {

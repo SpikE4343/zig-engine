@@ -436,11 +436,60 @@ pub fn applyVertexShader(mvp: *const Mat44f, index: u16, v: Vec4f) Vec4f {
     return out;
 }
 
-///
-pub fn applyPixelShader(mvp: *const Mat44f, pixel: Vec4f, color: Vec4f) Vec4f {
-    return color.scaleDup(1);
+pub fn applyToneMappingPixelShader(mvp: *const Mat44f, pixel: Vec4f, color: Vec4f) Vec4f {
+    var cd = color.scaleDup(2);
+    var c1 = cd;
+    c1.add(Vec4f.init(1,1,1,0));
+    cd.divVec(c1);
+    return cd;
 }
 
+pub inline fn uncharted2_tonemap_partial(x:Vec4f) Vec4f
+{
+    const A = 0.15;
+    const B = 0.50;
+    const C = 0.10;
+    const D = 0.20;
+    const E = 0.02;
+    const F = 0.30;
+    
+    const EdivF = E/F;
+    const DmulE = D*E;
+    const DmulF = D*F;
+    const CmulB = C*B;
+
+    const xmulA = x.scaleDup(A);
+    
+    var xNumer = x.mulDup(xmulA.addScalarDup(CmulB));
+    xNumer.addScalar(DmulE);
+
+
+    var xDenom = x.mulDup(xmulA.addScalarDup(B));
+    xDenom.addScalar(DmulF);
+
+    xNumer.divVec(xDenom);
+    xNumer.subScalar(EdivF);
+
+    return xNumer;   
+    //return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
+}
+
+pub inline fn uncharted2_filmic(v:Vec4f) Vec4f
+{
+    const exposure_bias = 2.0;
+    const curr = uncharted2_tonemap_partial(v.scaleDup(exposure_bias));
+
+    const W = Vec4f.init(11.2,11.2,11.2,0);
+    const white_scale = Vec4f.one().divVecDup(uncharted2_tonemap_partial(W));
+    return curr.mulDup(white_scale);
+}
+
+///
+pub fn applyPixelShader(mvp: *const Mat44f, pixel: Vec4f, color: Vec4f) Vec4f {
+    return uncharted2_filmic( color);
+}
+
+///
 pub fn drawPoint(mvp: *const Mat44f, point: Vec4f, color: Vec4f) void {
     const px = applyVertexShader(mvp, 0, point);
     const pc = applyPixelShader(mvp, px, color);

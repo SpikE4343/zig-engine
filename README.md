@@ -46,7 +46,7 @@ Write a software rendering engine and explore some zig at the same time.
   - [ ] Text Rendering
   - [ ] Ui Render texture different from world
   - [ ] Depth Buffer
-  - [ ] Backface culling
+  - [x] Backface culling
   - [ ] Wrap render buffer
   - [ ] Shaders
   - [ ] Texture Mapping

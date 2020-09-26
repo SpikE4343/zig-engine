@@ -92,6 +92,14 @@ pub fn showMouseCursor(show:u1) u1 {
   return @intCast(u1, c.SDL_ShowCursor(@intCast(c_int, show)));
 }
 
+pub fn setRelativeMouseMode(enabled:u1) void {
+  _=c.SDL_SetRelativeMouseMode(@intToEnum(c.SDL_bool, enabled));
+}
+
+pub fn setCaptureMouse(enabled:u1) void {
+  _=c.SDL_CaptureMouse(@intToEnum(c.SDL_bool, enabled));
+}
+
 pub inline fn targetFrameTimeMs() u32 {
   return config.targetDt();
 }

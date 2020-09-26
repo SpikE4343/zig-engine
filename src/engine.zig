@@ -50,6 +50,7 @@ pub fn main() !void {
         {
             var el = Sampler.begin(&profiler,"engine.main");
             defer el.end();
+            
             {
                 var supdate = Sampler.begin(&profiler,"system.update");
                 defer supdate.end();
