@@ -91,14 +91,16 @@ pub fn scale(a: Vec2, b: f64) Vec2 {
 
 pub const Mesh = struct {
     vertexBuffer: []Vec4f,
+    vertexNormalBuffer: []Vec4f,
     indexBuffer: []u16,
     colorBuffer: []Vec4f,
 
-    pub fn init(verts: []Vec4f, indicies: []u16, colors: []Vec4f) Mesh {
+    pub fn init(verts: []Vec4f, indicies: []u16, colors: []Vec4f, vertNormals: []Vec4f) Mesh {
         return Mesh{
             .vertexBuffer = verts,
             .indexBuffer = indicies,
             .colorBuffer = colors,
+            .vertexNormalBuffer = vertNormals,
         };
     }
 };
@@ -107,6 +109,7 @@ pub const Mesh = struct {
 const PixelBuffers = struct {
     const pixelsCapacity = 800 * 600;
     buffers: [2][pixelsCapacity]Color,
+    depthBuffer: [pixelsCapacity]f32,
     frontIndex: usize,
     w: usize,
     h: usize,
@@ -133,6 +136,7 @@ const PixelBuffers = struct {
             var x: usize = 0;
             while (x < self.w) {
                 self.*.buffers[self.*.frontIndex][x + self.w * y] = c;
+                self.*.depthBuffer[x + self.w * y] = std.math.inf(f32);
                 x += 1;
             }
             y += 1;
@@ -145,6 +149,22 @@ const PixelBuffers = struct {
             const uy = @intCast(usize, y);
             self.*.buffers[self.frontIndex][ux + self.*.w * uy] = color;
         }
+    }
+
+    pub inline fn depthTest(self:*PixelBuffers, x: i32, y: i32, z:f32) u1 {
+        if (x >= 0 and y >= 0 and x < @intCast(c_int, self.w) and y < @intCast(c_int, self.h)) {
+            const ux = @intCast(usize, x);
+            const uy = @intCast(usize, y);
+            const index = ux + self.*.w * uy;
+            const existing = self.*.depthBuffer[index];
+            if(z < existing )
+            {
+                self.*.depthBuffer[index] = z;
+                return 1;
+            }
+        }
+
+        return 0;
     }
 
     pub fn drawThickLine(self: *PixelBuffers, xFrom: c_int, yFrom: c_int, xTo: c_int, yTo: c_int, color: Color, thickness: f64) void {
@@ -206,14 +226,14 @@ const PixelBuffers = struct {
         }
     }
 
-    pub fn drawLine(self: *PixelBuffers, xFrom: c_int, yFrom: c_int, xTo: c_int, yTo: c_int, color: Color) void {
+    pub fn drawLine(self: *PixelBuffers, xFrom: i32, yFrom: i32, xTo: i32, yTo: i32, color: Color) void {
         if (xFrom == xTo and yFrom == yTo) {
             self.write(xFrom, yFrom, color);
         }
-        var x0: c_int = undefined;
-        var x1: c_int = undefined;
-        var y0: c_int = undefined;
-        var y1: c_int = undefined;
+        var x0: i32 = undefined;
+        var x1: i32 = undefined;
+        var y0: i32 = undefined;
+        var y1: i32 = undefined;
         var invX: bool = undefined;
         var invY: bool = undefined;
         if (xFrom < xTo) {
@@ -235,7 +255,7 @@ const PixelBuffers = struct {
             invY = true;
         }
         if (x1 - x0 < y1 - y0) {
-            var y: c_int = y0;
+            var y: i32 = y0;
             while (y <= y1) {
                 const inc = @divFloor((x1 - x0 + 1) * (y - y0), y1 - y0 + 1);
                 const x = block: {
@@ -249,7 +269,7 @@ const PixelBuffers = struct {
                 y += 1;
             }
         } else {
-            var x: c_int = x0;
+            var x: i32 = x0;
             while (x <= x1) {
                 const inc = @divFloor((y1 - y0 + 1) * (x - x0), x1 - x0 + 1);
                 const y = block: {
@@ -382,7 +402,7 @@ const Bounds = struct {
 var pixels: PixelBuffers = undefined;
 var profile: ?*Profile = undefined;
 
-pub fn drawLine(xFrom: c_int, yFrom: c_int, xTo: c_int, yTo: c_int, color: Color) void {
+pub fn drawLine(xFrom: i32, yFrom: i32, xTo: i32, yTo: i32, color: Color) void {
   pixels.drawLine(xFrom, yFrom, xTo, yTo, color);
 }
 
@@ -399,16 +419,22 @@ pub fn init(renderWidth: u16, renderHeight: u16, profileContext:?*Profile) !void
     pixels.init(renderWidth, renderHeight);
 }
 
-pub fn drawMesh(mv: *const Mat44f, mvp: *const Mat44f, mesh: *Mesh) void {
+pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh) void {
     var sp = profile.?.beginSample("render.mesh.draw");
     defer profile.?.endSample(sp);
+
+    var mv = v.*;
+    mv.mul(m.*);
+
+    var mvp = p.*;
+    mvp.mul(mv);
 
     const ids = mesh.indexBuffer.len;
     const numTris = ids / 3;
 
     var t: u16 = 0;
     while (t < ids) {
-        drawTri(mv, mvp, t, mesh);
+        drawTri(m, v, p, &mv, &mvp, t, mesh);
         t += 3;
     }
 }
@@ -434,14 +460,6 @@ pub fn applyVertexShader(mvp: *const Mat44f, index: u16, v: Vec4f) Vec4f {
     out.x = hW * out.x + hW;
     out.y = hH * -out.y + hH;
     return out;
-}
-
-pub fn applyToneMappingPixelShader(mvp: *const Mat44f, pixel: Vec4f, color: Vec4f) Vec4f {
-    var cd = color.scaleDup(2);
-    var c1 = cd;
-    c1.add(Vec4f.init(1,1,1,0));
-    cd.divVec(c1);
-    return cd;
 }
 
 pub inline fn uncharted2_tonemap_partial(x:Vec4f) Vec4f
@@ -485,22 +503,42 @@ pub inline fn uncharted2_filmic(v:Vec4f) Vec4f
 }
 
 ///
-pub fn applyPixelShader(mvp: *const Mat44f, pixel: Vec4f, color: Vec4f) Vec4f {
-    return uncharted2_filmic( color);
+pub fn applyPixelShader(mvp: *const Mat44f, pixel: Vec4f, worldPixel: Vec4f, color: Vec4f, normal:Vec4f, lightDir:Vec4f) Vec4f {
+    return uncharted2_filmic( 
+        color.scaleDup(
+            std.math.max(lightDir.dot3(normal)*1, 0.1))
+            );
 }
 
 ///
 pub fn drawPoint(mvp: *const Mat44f, point: Vec4f, color: Vec4f) void {
     const px = applyVertexShader(mvp, 0, point);
-    const pc = applyPixelShader(mvp, px, color);
+    const pc = color;
 
     const c = Color.init(@floatToInt(u8, pc.x * 255), @floatToInt(u8, pc.y * 255), @floatToInt(u8, pc.z * 255), @floatToInt(u8, pc.w * 255));
 
-    writePixel(@floatToInt(i16, px.x), @floatToInt(i16, px.y), c);
+    if( px.x >=0 and px.x <= 1000 and px.y >=0 and px.y <= 1000)
+        writePixel(@floatToInt(i32, px.x), @floatToInt(i32, px.y), c);
+}
+
+///
+pub fn drawWorldLine(mvp: *const Mat44f, start: Vec4f, end: Vec4f, color: Vec4f) void {
+    const spx = applyVertexShader(mvp, 0, start);
+    const epx = applyVertexShader(mvp, 0, end);
+    const pc = color;
+
+    const c = Color.init(@floatToInt(u8, pc.x * 255), @floatToInt(u8, pc.y * 255), @floatToInt(u8, pc.z * 255), @floatToInt(u8, pc.w * 255));
+
+    if( spx.x >=0 and spx.x <= 1000 and spx.y >=0 and spx.y <= 1000 and
+        epx.x >=0 and epx.x <= 1000 and epx.y >=0 and epx.y <= 1000)
+        drawLine(
+            @floatToInt(i32, spx.x), @floatToInt(i32, spx.y), 
+            @floatToInt(i32, epx.x), @floatToInt(i32, epx.y), 
+            c);
 }
 
 /// Render triangle to frame buffer
-pub fn drawTri(mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
+pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
     var sp = profile.?.beginSample("render.mesh.draw.tri");
     defer profile.?.endSample(sp);
 
@@ -509,7 +547,6 @@ pub fn drawTri(mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh) 
     const rv2 = mesh.vertexBuffer[mesh.indexBuffer[offset + 2]];
 
     // cull back facing triangles
-
     const mv0 = mv.mul33_vec4(rv0);
     const mv1 = mv.mul33_vec4(rv1);
     const mv2 = mv.mul33_vec4(rv2);
@@ -520,10 +557,18 @@ pub fn drawTri(mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh) 
     e0.sub(mv0);// cull back facing triangles
     e1.sub(mv0);
 
-    const triNormal = e0.cross3(e1);
-    const bfc = triNormal.dot(mv0);
+    const triNormal = e0.cross3(e1).normalized();
+
+    
+    const bfc = mv0.normalized().dot(triNormal);
     if( bfc > 0.0000000000001)
         return;
+
+
+
+    const wv0 = model.mul33_vec4(rv0);
+    const wv1 = model.mul33_vec4(rv1);
+    const wv2 = model.mul33_vec4(rv2);
 
     const v0 = applyVertexShader(mvp, offset + 0, rv0);
     const v1 = applyVertexShader(mvp, offset + 1, rv1);
@@ -533,14 +578,24 @@ pub fn drawTri(mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh) 
     const c1 = mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
     const c2 = mesh.colorBuffer[mesh.indexBuffer[offset + 2]];
 
-
-    // TODO: backface cull
-
-
     const area = triEdge(v0, v1, v2);
 
     if (area <= 0)
         return;
+
+
+    const n0 = mesh.vertexNormalBuffer[mesh.indexBuffer[offset + 0]];
+    const n1 = mesh.vertexNormalBuffer[mesh.indexBuffer[offset + 1]];
+    const n2 = mesh.vertexNormalBuffer[mesh.indexBuffer[offset + 2]];
+
+    const wn0 = model.mul33_vec4(n0);
+    const wn1 = model.mul33_vec4(n1);
+    const wn2 = model.mul33_vec4(n2);
+
+    var worldNormalTri = wn0;
+    worldNormalTri.add(wn1);
+    worldNormalTri.add(wn2);
+    worldNormalTri.normalize();
 
     const renderBounds = Bounds.init(
       Vec4f.init(0, 0, 0, 0), 
@@ -565,9 +620,15 @@ pub fn drawTri(mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh) 
     // TODO: iterate tri edge vertically rendering scan lines to the opposite edge
     var y = bounds.min.y;
     var p: Vec4f = Vec4f.init(0, 0, 0, 0);
-    var fbc: Vec4f = Vec4f.init(0, 0, 0, 0);
+    var worldPixel: Vec4f = Vec4f.init(0, 0, 0, 0);
+    var pixelNormal:Vec4f = Vec4f.init(0, 0, 0, 0);
+    var fbc: Vec4f = Vec4f.init(0, 0, 0, 1);
     var c: Color = Color.black();
 
+    var warea = triEdge(wv0, wv1, wv2);
+
+    
+    
 
     while (y <= bounds.max.y) {
         var x = bounds.min.x;
@@ -576,60 +637,71 @@ pub fn drawTri(mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh) 
         while (x <= bounds.max.x) {
             defer x += 1;
 
-            // var sx: f32 = 0;
-            // var sy: f32 = 0;
             var vc: Vec4f = Vec4f.init(0, 0, 0, 0);
 
             p.x = x; 
             p.y = y; 
 
-            // while (@floatToInt(u32, sy) < subsamples) {
-            //     defer sy += 1;
+            var w0 = triEdge(v1, v2, p);
+            var w1 = triEdge(v2, v0, p);
+            var w2 = triEdge(v0, v1, p);
 
-            //     while (@floatToInt(u32, sx) < subsamples) {
-            //         defer sx += 1;
+            // TODO: near plane clipping
 
-                    
+            if (w0 < 0 or w1 < 0 or w2 < 0)
+                continue;
 
-            //         p.x = x + stepDist * (sx + 1); // sub sampling
-            //         p.y = y + stepDist * (sy + 1); // sub sampling
+            // var spp = profile.?.beginSample("render.mesh.draw.tri.pixel");
+            // defer profile.?.endSample(spp);
+            
+            w0 /= area;
+            w1 /= area;
+            w2 /= area;
 
-                    var w0 = triEdge(v1, v2, p);
-                    var w1 = triEdge(v2, v0, p);
-                    var w2 = triEdge(v0, v1, p);
+            // if we use perspective correct interpolation we need to
+            // multiply the result of this interpolation by z, the depth
+            // of the point on the 3D triangle that the pixel overlaps.
+            const z = 1.0 / (w0 * v0.z + w1 * v1.z + w2 * v2.z);
 
-                    // TODO: near plane clipping
+            if( pixels.depthTest(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
+                continue;
 
-                    if (w0 < 0 or w1 < 0 or w2 < 0)
-                        continue;
+            p.z = z;
 
-                    // var spp = profile.?.beginSample("render.mesh.draw.tri.pixel");
-                    // defer profile.?.endSample(spp);
-                 
-                    w0 /= area;
-                    w1 /= area;
-                    w2 /= area;
+            // interpolate vertex colors across all pixels
+            fbc.x = (w0 * c0.x + w1 * c1.x + w2 * c2.x) * z;
+            fbc.y = (w0 * c0.y + w1 * c1.y + w2 * c2.y) * z;
+            fbc.z = (w0 * c0.z + w1 * c1.z + w2 * c2.z) * z;
+            fbc.w = 1.0;
 
-                    // if we use perspective correct interpolation we need to
-                    // multiply the result of this interpolation by z, the depth
-                    // of the point on the 3D triangle that the pixel overlaps.
-                    const z = 1.0 / (w0 * v0.z + w1 * v1.z + w2 * v2.z);
 
-                    // interpolate vertex colors across all pixels
-                    fbc.x = (w0 * c0.x + w1 * c1.x + w2 * c2.x) * z;
-                    fbc.y = (w0 * c0.y + w1 * c1.y + w2 * c2.y) * z;
-                    fbc.z = (w0 * c0.z + w1 * c1.z + w2 * c2.z) * z;
-                    fbc.w = 1.0;
+        
+            // var ww0 = triEdge(wv1, wv2, p);
+            // var ww1 = triEdge(wv2, wv0, p);
+            // var ww2 = triEdge(wv0, wv1, p);
 
-                    // vc.add(applyPixelShader(mvp, p, fbc));
-                    vc = applyPixelShader(mvp, p, fbc);
-            //     }
-            // }
+            
+            
+            // ww0 /= warea;
+            // ww1 /= warea;
+            // ww2 /= warea;
+
+            // worldPixel.x = (ww0 * wv0.x + ww1 * wv1.x + ww2 * wv2.x) * z;
+            // worldPixel.y = (ww0 * wv0.y + ww1 * wv1.y + ww2 * wv2.y) * z;
+            // worldPixel.z = (ww0 * wv0.z + ww1 * wv1.z + ww2 * wv2.z) * z;
+            // worldPixel.w = 1.0;
+
+            // pixelNormal.x = (ww0 * wn0.x + ww1 * wn1.x + ww2 * wn2.x) * z;
+            // pixelNormal.y = (ww0 * wn0.y + ww1 * wn1.y + ww2 * wn2.y) * z;
+            // pixelNormal.z = (ww0 * wn0.z + ww1 * wn1.z + ww2 * wn2.z) * z;
+            // pixelNormal.w = 1.0;
+
+            
+            vc = applyPixelShader(mvp, p, worldPixel, fbc, worldNormalTri, Vec4f.init(0.3, 0.2, 0.0, 0).normalized());
 
             if(vc.w <= 0.0)
               continue;
             
-            // vc.scale(1.0/@intToFloat(f32, subsamples*subsamples));
             vc.clamp01();
             vc.scale(255);
 
@@ -638,12 +710,27 @@ pub fn drawTri(mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh) 
             c.setB(@floatToInt(u8, @fabs(vc.z)));
             c.setA(@floatToInt(u8, @fabs(vc.w)));
 
-            writePixel(@floatToInt(i16, x), @floatToInt(i16, y), c);
+            writePixel(@floatToInt(i32, x), @floatToInt(i32, y), c);
         }
     }
+
+    var de0 = rv1;
+    var de1 = rv2;
+    
+    de0.sub(rv0);// cull back facing triangles
+    de1.sub(rv0);
+
+    const dtriNormal = de0.cross3(de1).normalized();
+
+
+    var center = rv0.addDup(rv1);
+    center.add(rv2);
+    center.div(3);
+
+    drawWorldLine(mvp, center, center.addDup(dtriNormal), Vec4f.init(1,1,1,1));
 }
 
-pub fn writePixel(x: i16, y: i16, c: Color) void {
+pub fn writePixel(x: i32, y: i32, c: Color) void {
     pixels.write(x, y, c);
 }
 

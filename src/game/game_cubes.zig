@@ -8,17 +8,28 @@ const assert = std.debug.assert;
 const engine = @import("../engine.zig");
 const input = engine.input;
 
-const w = 1;
+const w = 0.5;
 var cubeVerts = [_]engine.Vec4f{
-    engine.Vec4f.init(w, w, -w, 1.0), // 0
-    engine.Vec4f.init(w, -w, -w, 1.0), // 1
-    engine.Vec4f.init(w, w, w, 1.0), // 2
-    engine.Vec4f.init(w, -w, w, 1.0), // 3
+    engine.Vec4f.init(-w,  w,  w, 1.0), // 0
+    engine.Vec4f.init(-w, -w,  w, 1.0), // 1
+    engine.Vec4f.init(-w,  w, -w, 1.0), // 2
+    engine.Vec4f.init(-w, -w, -w, 1.0), // 3
 
-    engine.Vec4f.init(-w, w, -w, 1.0), // 4
-    engine.Vec4f.init(-w, -w, -w, 1.0), // 5
-    engine.Vec4f.init(-w, w, w, 1.0), // 6
-    engine.Vec4f.init(-w, -w, w, 1.0), // 7
+    engine.Vec4f.init( w,  w,  w, 1.0), // 4
+    engine.Vec4f.init( w, -w,  w, 1.0), // 5
+    engine.Vec4f.init( w,  w, -w, 1.0), // 6
+    engine.Vec4f.init( w, -w, -w, 1.0), // 7
+};
+
+var cubeVertNormals = [_]engine.Vec4f{
+    engine.Vec4f.init(0.5773503, 0.5773503, 0.5773503, 1.0), 
+    engine.Vec4f.init(-0.5773503, 0.5773503, -0.5773503, 1.0), 
+    engine.Vec4f.init(-0.5773503, 0.5773503, 0.5773503, 1.0), 
+    engine.Vec4f.init(0.5773503, -0.5773503, -0.5773503, 1.0), 
+    engine.Vec4f.init(-0.5773503, -0.5773503, -0.5773503, 1.0), 
+    engine.Vec4f.init(0.5773503, 0.5773503, -0.5773503, 1.0), 
+    engine.Vec4f.init(0.5773503, -0.5773503, 0.5773503, 1.0), 
+    engine.Vec4f.init(-0.5773503, -0.5773503, 0.5773503, 1.0),
 };
 
 // indicies
@@ -51,6 +62,7 @@ var cubeColors = [_]engine.Vec4f{
 };
 
 var modelMat = engine.Mat44f.identity();
+var viewMat = engine.Mat44f.identity();
 var mesh = createCube();
 var projMat:engine.Mat44f = undefined; 
 
@@ -63,8 +75,7 @@ pub fn init() !void {
         2000
         );
 
-    lastMousePos.x = @intToFloat(f32, engine.input.getMouseX());
-    lastMousePos.y = @intToFloat(f32, engine.input.getMouseY());
+    viewMat.translate(engine.Vec4f.init(0, 0, -2.0, 0));
 }
 
 pub fn shutdown() !void {
@@ -72,7 +83,7 @@ pub fn shutdown() !void {
 }
 
 fn createCube() engine.render.Mesh {
-    return engine.render.Mesh.init(cubeVerts[0..], cubeTris[0..], cubeColors[0..]);
+    return engine.render.Mesh.init(cubeVerts[0..], cubeTris[0..], cubeColors[0..], cubeVertNormals[0..]);
 }
 
 fn drawProgress(x:i16, y:i16, value:f32, max:f32) void {
@@ -87,10 +98,6 @@ fn drawProgress(x:i16, y:i16, value:f32, max:f32) void {
 
 const moveSpeed = 0.1;
 
-var cameraPos = engine.Vec4f.zero();
-var cameraRot = engine.Vec4f.zero();
-var lastMousePos = engine.Vec4f.zero();
-
 pub fn update() bool 
 {   
     if (input.isKeyDown(input.KeyCode.ESCAPE))
@@ -98,55 +105,34 @@ pub fn update() bool
 
     var mvp = engine.Mat44f.identity();
     var mv = engine.Mat44f.identity();
-    var viewMat = engine.Mat44f.identity();
 
     const depth = (input.keyStateFloat(input.KeyCode.W) - input.keyStateFloat(input.KeyCode.S)) * moveSpeed;
     const horizontal = (input.keyStateFloat(input.KeyCode.A) - input.keyStateFloat(input.KeyCode.D)) * moveSpeed;
     const vertical = (input.keyStateFloat(input.KeyCode.DOWN) - input.keyStateFloat(input.KeyCode.UP)) * moveSpeed;
+
+    const rot = (input.keyStateFloat(input.KeyCode.Q) - input.keyStateFloat(input.KeyCode.E)) * moveSpeed;
+
+    modelMat.mul(engine.Mat44f.rotY(0.001 * @intToFloat(f32, input.getMouseRight()) * @intToFloat(f32,input.getMouseX()) ));
+    viewMat.translate(engine.Vec4f.init(horizontal, vertical, depth, 0));
+
+    _=engine.sys.showMouseCursor(~input.getMouseRight());
+
     
-    const currentMouse = engine.Vec4f.init(
-        @intToFloat(f32, input.getMouseX()), 
-        @intToFloat(f32, input.getMouseY()), 
-        0, 0);
 
-    var deltaMouse = currentMouse;
-    deltaMouse.sub(lastMousePos);
-    lastMousePos = currentMouse;
+    //modelMat.mul(Mat44f.rotX(0.01));
+    //modelMat.mul(engine.Mat44f.rotY(rot));
+    //modelMat.mul(Mat44f.rotZ(0.001));
 
-    _= engine.sys.showMouseCursor(~input.getMouseRight());
-    engine.sys.setRelativeMouseMode(input.getMouseRight());
-    engine.sys.setCaptureMouse(input.getMouseRight());
-
-
-    if( input.getMouseRight() == 1)
-    {
-      cameraRot.y += 0.01 * deltaMouse.x;
-      cameraRot.x += 0.01 * deltaMouse.y;
-    }
-
-  
-    viewMat.mul33(engine.Mat44f.rotY(cameraRot.y));
-    viewMat.mul33(engine.Mat44f.rotX(cameraRot.x));
-
-    var forward = viewMat.mul33_vec4(engine.Vec4f.forward());
-    forward.scale(depth);
-    cameraPos.add(forward);
-
-    //forward.print();
-    //cameraPos.print();
-    viewMat.translate(cameraPos);
     
-    mv.copy(viewMat);
-    mv.mul(modelMat);
-
-    mvp.copy(projMat);
-    mvp.mul(mv);
 
     {
         // var srenderDraw = engine.Sampler.begin(&engine.profiler,"draw.mesh");
         // defer srenderDraw.end();
 
-        engine.render.drawMesh(&mv, &mvp, &mesh);
+        // const renderStart = frameTimer.read();
+        // renderTimer.reset();
+        engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh);
+        
     }
 
     return true;
