@@ -126,32 +126,40 @@ pub const Mesh = struct {
         e0.sub(v0);
         e1.sub(v0);
 
-        e0.normalize3();
-        e1.normalize3();
+        // e0.normalize3();
+        // e1.normalize3();
 
-        const normal = e0.cross3(e1).normalized3();
+        const rnormal = e0.cross3(e1);
+        const normal = rnormal.normalized3();
 
         self.vertexNormalBuffer[vi0].add(normal);
-        self.vertexNormalBuffer[vi0].normalize3();
+        //self.vertexNormalBuffer[vi0].div3(2);
+
         self.vertexNormalBuffer[vi0].w = 1;
+
 
         self.vertexNormalBuffer[vi1].add(normal);
         self.vertexNormalBuffer[vi1].normalize3();
+        //self.vertexNormalBuffer[vi1].div3(2);
         self.vertexNormalBuffer[vi1].w = 1;
 
         self.vertexNormalBuffer[vi2].add(normal);
         self.vertexNormalBuffer[vi2].normalize3();
+        //self.vertexNormalBuffer[vi2].div3(2);
         self.vertexNormalBuffer[vi2].w = 1;
 
         tri += 3;
       }
 
-      // tri = 0;
-      // while(tri < self.vertexNormalBuffer.len)
-      // {
-      //   self.vertexNormalBuffer[tri].div3(self.vertexNormalBuffer[tri].w);
-      //   tri += 1;
-      // }
+      tri = 0;
+      while(tri < self.vertexNormalBuffer.len)
+      {
+        warn("\n[{}] : ", .{tri});
+        //self.vertexNormalBuffer[tri].normalize3();
+        self.vertexNormalBuffer[tri].print();
+        //self.vertexNormalBuffer[tri].div3(self.vertexNormalBuffer[tri].w);
+        tri += 1;
+      }
     }
 };
 

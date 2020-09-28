@@ -83,7 +83,7 @@ pub fn main() !void {
             }
         }
 
-        try profiler.streamPrint(stdout);
+        //try profiler.streamPrint(stdout);
         profiler.nextFrame();
     }
 }

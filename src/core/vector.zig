@@ -230,7 +230,7 @@ pub const Vec4f = struct {
 
   /// constant version of normalize that returns a new `Vec4f` with length of 1.0
   pub inline fn normalized3(self:Vec4f) Vec4f {
-    const len = self.length();
+    const len = self.length3();
     return Vec4f.init(
       self.x / len,
       self.y / len,
@@ -258,6 +258,10 @@ pub const Vec4f = struct {
   }
 
   pub fn print(self:Vec4f) void {
+    std.debug.warn(" [{}, {}, {}, {} | {} | {} ]", .{self.x, self.y, self.z, self.w, self.length(), self.length3()});      
+  }
+
+  pub fn println(self:Vec4f) void {
     std.debug.warn(" [{}, {}, {}, {} | {} | {} ]\n", .{self.x, self.y, self.z, self.w, self.length(), self.length3()});      
   }
 };

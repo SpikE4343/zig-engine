@@ -33,6 +33,18 @@ var cubeVertNormals = [_]engine.Vec4f{
     engine.Vec4f.init(0, 0, 0, 1.0),
 };
 
+var cubeVertUVs = [_]engine.Vec4f{
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0),
+
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0),
+};
+
 // indicies
 var cubeTris = [_]u16{
     4, 2, 0,
