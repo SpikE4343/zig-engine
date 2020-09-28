@@ -120,6 +120,14 @@ pub const Vec4f = struct {
     self.w /= scalar;
   }
 
+
+  pub inline fn div3(self:*Vec4f, scalar:f32) void 
+  {
+    self.x /= scalar;
+    self.y /= scalar;
+    self.z /= scalar;
+  }
+
   pub inline fn divDup(self:Vec4f, scalar:f32) Vec4f 
   {
     var out = self;
@@ -155,12 +163,14 @@ pub const Vec4f = struct {
          + self.w*other.w;
   }
 
+  
+
   pub inline fn cross3(self:Vec4f, other:Vec4f) Vec4f {
     return Vec4f.init(
-      self.y * other.y - self.z * other.y,
+      self.y * other.z - self.z * other.y,
       self.z * other.x - self.x * other.z,
       self.x * other.y - self.y * other.x,
-      0
+      1
     );
   }
 
@@ -204,6 +214,31 @@ pub const Vec4f = struct {
     );
   }
 
+   pub inline fn length3(self:Vec4f) f32 {
+    return math.sqrt(self.length3Sqr());
+  }
+
+  /// return length of vector squared. Avoids `math.sqrt`
+  pub inline fn length3Sqr(self:Vec4f) f32 {
+    return self.dot3(self);
+  }
+
+  /// make `length` of vector 1.0 while maintaining direction
+  pub inline fn normalize3(self:*Vec4f) void {
+    self.div3(self.length3());
+  }
+
+  /// constant version of normalize that returns a new `Vec4f` with length of 1.0
+  pub inline fn normalized3(self:Vec4f) Vec4f {
+    const len = self.length();
+    return Vec4f.init(
+      self.x / len,
+      self.y / len,
+      self.z / len,
+      self.w
+    );
+  }
+
   pub inline fn clamp01(self:*Vec4f) void {
     self.clamp(0.0, 1.0);
   }
@@ -223,7 +258,7 @@ pub const Vec4f = struct {
   }
 
   pub fn print(self:Vec4f) void {
-    std.debug.warn(" [{}, {}, {}, {} ]\n", .{self.x, self.y, self.z, self.w});      
+    std.debug.warn(" [{}, {}, {}, {} | {} | {} ]\n", .{self.x, self.y, self.z, self.w, self.length(), self.length3()});      
   }
 };
 

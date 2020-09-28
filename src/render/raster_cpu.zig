@@ -103,6 +103,56 @@ pub const Mesh = struct {
             .vertexNormalBuffer = vertNormals,
         };
     }
+
+    pub fn recalculateNormals(self:*Mesh) void 
+    {
+      const ids = self.indexBuffer.len;
+      const numTris = ids / 3;
+
+      var tri:u16 = 0;
+      while (tri < ids) 
+      {
+        const vi0 = self.indexBuffer[tri + 0];
+        const vi1 = self.indexBuffer[tri + 1];
+        const vi2 = self.indexBuffer[tri + 2];
+
+        const v0 = self.vertexBuffer[vi0];
+        const v1 = self.vertexBuffer[vi1];
+        const v2 = self.vertexBuffer[vi2];
+
+        var e0 = v1;
+        var e1 = v2;
+        
+        e0.sub(v0);
+        e1.sub(v0);
+
+        e0.normalize3();
+        e1.normalize3();
+
+        const normal = e0.cross3(e1).normalized3();
+
+        self.vertexNormalBuffer[vi0].add(normal);
+        self.vertexNormalBuffer[vi0].normalize3();
+        self.vertexNormalBuffer[vi0].w = 1;
+
+        self.vertexNormalBuffer[vi1].add(normal);
+        self.vertexNormalBuffer[vi1].normalize3();
+        self.vertexNormalBuffer[vi1].w = 1;
+
+        self.vertexNormalBuffer[vi2].add(normal);
+        self.vertexNormalBuffer[vi2].normalize3();
+        self.vertexNormalBuffer[vi2].w = 1;
+
+        tri += 3;
+      }
+
+      // tri = 0;
+      // while(tri < self.vertexNormalBuffer.len)
+      // {
+      //   self.vertexNormalBuffer[tri].div3(self.vertexNormalBuffer[tri].w);
+      //   tri += 1;
+      // }
+    }
 };
 
 // TODO: allocate from heap
@@ -143,11 +193,12 @@ const PixelBuffers = struct {
         }
     }
 
-    pub inline fn write(self: *PixelBuffers, x: c_int, y: c_int, color: Color) void {
+    pub inline fn write(self: *PixelBuffers, x: c_int, y: c_int, z: f32, color: Color) void {
         if (x >= 0 and y >= 0 and x < @intCast(c_int, self.w) and y < @intCast(c_int, self.h)) {
             const ux = @intCast(usize, x);
             const uy = @intCast(usize, y);
             self.*.buffers[self.frontIndex][ux + self.*.w * uy] = color;
+            self.*.depthBuffer[ux + self.*.w * uy] = z;
         }
     }
 
@@ -218,7 +269,7 @@ const PixelBuffers = struct {
                 const distToLine2: f64 = h1 - c1;
                 assert(distToLine2 > -0.001);
                 if (distToLine2 < thickness2) {
-                    self.write(ix, iy, color);
+                    self.write(ix, iy, 0, color);
                 }
                 ix += 1;
             }
@@ -228,7 +279,7 @@ const PixelBuffers = struct {
 
     pub fn drawLine(self: *PixelBuffers, xFrom: i32, yFrom: i32, xTo: i32, yTo: i32, color: Color) void {
         if (xFrom == xTo and yFrom == yTo) {
-            self.write(xFrom, yFrom, color);
+            self.write(xFrom, yFrom, 0, color);
         }
         var x0: i32 = undefined;
         var x1: i32 = undefined;
@@ -265,7 +316,7 @@ const PixelBuffers = struct {
                         break :block x1 - inc;
                     }
                 };
-                write(self, x, y, color);
+                write(self, x, y, 0, color);
                 y += 1;
             }
         } else {
@@ -279,7 +330,7 @@ const PixelBuffers = struct {
                         break :block y1 - inc;
                     }
                 };
-                write(self, x, y, color);
+                write(self, x, y, 0, color);
                 x += 1;
             }
         }
@@ -494,7 +545,7 @@ pub inline fn uncharted2_tonemap_partial(x:Vec4f) Vec4f
 
 pub inline fn uncharted2_filmic(v:Vec4f) Vec4f
 {
-    const exposure_bias = 2.0;
+    const exposure_bias = 1.0;
     const curr = uncharted2_tonemap_partial(v.scaleDup(exposure_bias));
 
     const W = Vec4f.init(11.2,11.2,11.2,0);
@@ -506,7 +557,7 @@ pub inline fn uncharted2_filmic(v:Vec4f) Vec4f
 pub fn applyPixelShader(mvp: *const Mat44f, pixel: Vec4f, worldPixel: Vec4f, color: Vec4f, normal:Vec4f, lightDir:Vec4f) Vec4f {
     return uncharted2_filmic( 
         color.scaleDup(
-            std.math.max(lightDir.dot3(normal)*1, 0.1))
+            std.math.max(normal.dot3(lightDir)*50, 1))
             );
 }
 
@@ -537,11 +588,14 @@ pub fn drawWorldLine(mvp: *const Mat44f, start: Vec4f, end: Vec4f, color: Vec4f)
             c);
 }
 
+
 /// Render triangle to frame buffer
 pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
     var sp = profile.?.beginSample("render.mesh.draw.tri");
     defer profile.?.endSample(sp);
 
+    var vp = view.*;
+    vp.mul(proj.*);
     const rv0 = mesh.vertexBuffer[mesh.indexBuffer[offset + 0]];
     const rv1 = mesh.vertexBuffer[mesh.indexBuffer[offset + 1]];
     const rv2 = mesh.vertexBuffer[mesh.indexBuffer[offset + 2]];
@@ -557,32 +611,42 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
     e0.sub(mv0);// cull back facing triangles
     e1.sub(mv0);
 
-    const triNormal = e0.cross3(e1).normalized();
+    const triNormal = e0.cross3(e1).normalized3();
 
     
-    const bfc = mv0.normalized().dot(triNormal);
+    const bfc = mv0.normalized3().dot3(triNormal);
     if( bfc > 0.0000000000001)
         return;
-
-
-
-    const wv0 = model.mul33_vec4(rv0);
-    const wv1 = model.mul33_vec4(rv1);
-    const wv2 = model.mul33_vec4(rv2);
 
     const v0 = applyVertexShader(mvp, offset + 0, rv0);
     const v1 = applyVertexShader(mvp, offset + 1, rv1);
     const v2 = applyVertexShader(mvp, offset + 2, rv2);
 
-    const c0 = mesh.colorBuffer[mesh.indexBuffer[offset + 0]];
-    const c1 = mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
-    const c2 = mesh.colorBuffer[mesh.indexBuffer[offset + 2]];
-
+    
     const area = triEdge(v0, v1, v2);
 
     if (area <= 0)
         return;
 
+    const wv0 = model.mul_vec4(rv0);
+    const wv1 = model.mul_vec4(rv1);
+    const wv2 = model.mul_vec4(rv2);
+
+    const c0 = mesh.colorBuffer[mesh.indexBuffer[offset + 0]];
+    const c1 = mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
+    const c2 = mesh.colorBuffer[mesh.indexBuffer[offset + 2]];
+
+
+    var we0 = wv1;
+    var we1 = wv2;
+    
+    we0.sub(wv0);// cull back facing triangles
+    we1.sub(wv0);
+
+    we0.normalize3();
+    we1.normalize3();
+
+    const worldNormalTri = we1.cross3(we0).normalized3();
 
     const n0 = mesh.vertexNormalBuffer[mesh.indexBuffer[offset + 0]];
     const n1 = mesh.vertexNormalBuffer[mesh.indexBuffer[offset + 1]];
@@ -592,10 +656,11 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
     const wn1 = model.mul33_vec4(n1);
     const wn2 = model.mul33_vec4(n2);
 
-    var worldNormalTri = wn0;
-    worldNormalTri.add(wn1);
-    worldNormalTri.add(wn2);
-    worldNormalTri.normalize();
+    // var worldNormalTri = wn0;
+    // worldNormalTri.add(wn1);
+    // worldNormalTri.add(wn2);
+    // worldNormalTri.scale(-3);
+    // worldNormalTri.normalize3();
 
     const renderBounds = Bounds.init(
       Vec4f.init(0, 0, 0, 0), 
@@ -625,9 +690,10 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
     var fbc: Vec4f = Vec4f.init(0, 0, 0, 1);
     var c: Color = Color.black();
 
-    var warea = triEdge(wv0, wv1, wv2);
+    //var warea = triEdge(wv0, wv1, wv2);
 
     
+    const lightDir = Vec4f.init(-0.913913,0.389759,-0.113369, 1).normalized3();
     
 
     while (y <= bounds.max.y) {
@@ -661,7 +727,7 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
             // if we use perspective correct interpolation we need to
             // multiply the result of this interpolation by z, the depth
             // of the point on the 3D triangle that the pixel overlaps.
-            const z = 1.0 / (w0 * v0.z + w1 * v1.z + w2 * v2.z);
+            const z = (w0 * v0.z + w1 * v1.z + w2 * v2.z);
 
             if( pixels.depthTest(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
                 continue;
@@ -669,9 +735,9 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
             p.z = z;
 
             // interpolate vertex colors across all pixels
-            fbc.x = (w0 * c0.x + w1 * c1.x + w2 * c2.x) * z;
-            fbc.y = (w0 * c0.y + w1 * c1.y + w2 * c2.y) * z;
-            fbc.z = (w0 * c0.z + w1 * c1.z + w2 * c2.z) * z;
+            fbc.x = (w0 * c0.x + w1 * c1.x + w2 * c2.x) / z;
+            fbc.y = (w0 * c0.y + w1 * c1.y + w2 * c2.y) / z;
+            fbc.z = (w0 * c0.z + w1 * c1.z + w2 * c2.z) / z;
             fbc.w = 1.0;
 
 
@@ -691,13 +757,19 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
             // worldPixel.z = (ww0 * wv0.z + ww1 * wv1.z + ww2 * wv2.z) * z;
             // worldPixel.w = 1.0;
 
-            // pixelNormal.x = (ww0 * wn0.x + ww1 * wn1.x + ww2 * wn2.x) * z;
-            // pixelNormal.y = (ww0 * wn0.y + ww1 * wn1.y + ww2 * wn2.y) * z;
-            // pixelNormal.z = (ww0 * wn0.z + ww1 * wn1.z + ww2 * wn2.z) * z;
-            // pixelNormal.w = 1.0;
+            pixelNormal.x = (w0 * wn0.x + w1 * wn1.x + w2 * wn2.x) / z;
+            pixelNormal.y = (w0 * wn0.y + w1 * wn1.y + w2 * wn2.y) / z;
+            pixelNormal.z = (w0 * wn0.z + w1 * wn1.z + w2 * wn2.z) / z;
+            pixelNormal.w = 1.0;
 
+            // if( @mod(p.x, 10.0) == 0 )
+            // {
+            //   drawWorldLine(mvp, worldPixel, worldPixel.addDup(worldNormalTri.scaleDup(0.1)), Vec4f.init(1,1,1,1));
+            // }
             
-            vc = applyPixelShader(mvp, p, worldPixel, fbc, worldNormalTri, Vec4f.init(0.3, 0.2, 0.0, 0).normalized());
+            vc = applyPixelShader(
+              mvp, p, worldPixel, fbc, pixelNormal, 
+              lightDir);
 
             if(vc.w <= 0.0)
               continue;
@@ -710,28 +782,43 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
             c.setB(@floatToInt(u8, @fabs(vc.z)));
             c.setA(@floatToInt(u8, @fabs(vc.w)));
 
-            writePixel(@floatToInt(i32, x), @floatToInt(i32, y), c);
+            writePixel(@floatToInt(i32, x), @floatToInt(i32, y), z, c);
         }
     }
 
     var de0 = rv1;
     var de1 = rv2;
     
-    de0.sub(rv0);// cull back facing triangles
+    de0.sub(rv0);
     de1.sub(rv0);
 
-    const dtriNormal = de0.cross3(de1).normalized();
+    // de0.normalize();
+    // de1.normalize();
+
+   
+    const dtriNormal = de0.cross3(de1);
+    // //dtriNormal.print();
 
 
     var center = rv0.addDup(rv1);
     center.add(rv2);
     center.div(3);
 
-    drawWorldLine(mvp, center, center.addDup(dtriNormal), Vec4f.init(1,1,1,1));
+    // drawWorldLine(mvp, de0, rv0, Vec4f.init(0,1,0,1));
+    // drawWorldLine(mvp, rv0, de1, Vec4f.init(0,0,1,0));
+
+    //drawWorldLine()
+    drawWorldLine(mvp, center, center.addDup(dtriNormal), Vec4f.init(0,0,1,1));
+    
+    drawWorldLine(mvp, rv0, rv0.addDup(n0), Vec4f.init(1,0,0,1));
+
+    drawWorldLine(mvp, rv1, rv1.addDup(n1), Vec4f.init(0,1,0,1));
+
+    drawWorldLine(mvp, rv2, rv2.addDup(n2), Vec4f.init(0,0,1,1));
 }
 
-pub fn writePixel(x: i32, y: i32, c: Color) void {
-    pixels.write(x, y, c);
+pub fn writePixel(x: i32, y: i32, z: f32, c: Color) void {
+    pixels.write(x, y, z, c);
 }
 
 pub fn beginFrame() *u8 {

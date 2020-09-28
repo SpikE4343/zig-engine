@@ -22,60 +22,67 @@ var cubeVerts = [_]engine.Vec4f{
 };
 
 var cubeVertNormals = [_]engine.Vec4f{
-    engine.Vec4f.init(0.5773503, 0.5773503, 0.5773503, 1.0), 
-    engine.Vec4f.init(-0.5773503, 0.5773503, -0.5773503, 1.0), 
-    engine.Vec4f.init(-0.5773503, 0.5773503, 0.5773503, 1.0), 
-    engine.Vec4f.init(0.5773503, -0.5773503, -0.5773503, 1.0), 
-    engine.Vec4f.init(-0.5773503, -0.5773503, -0.5773503, 1.0), 
-    engine.Vec4f.init(0.5773503, 0.5773503, -0.5773503, 1.0), 
-    engine.Vec4f.init(0.5773503, -0.5773503, 0.5773503, 1.0), 
-    engine.Vec4f.init(-0.5773503, -0.5773503, 0.5773503, 1.0),
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0),
+
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0), 
+    engine.Vec4f.init(0, 0, 0, 1.0),
 };
 
 // indicies
 var cubeTris = [_]u16{
     4, 2, 0,
     2, 7, 3,
+
     6, 5, 7,
     1, 7, 5,
+    
     0, 3, 1,
     4, 1, 5,
+    
     4, 6, 2,
     2, 6, 7,
+    
     6, 4, 5,
     1, 3, 7,
+    
     0, 2, 3,
     4, 0, 1,
 };
 
 // colors
 var cubeColors = [_]engine.Vec4f{
-    engine.Vec4f.init(0.1, 1, 0.3, 1.0), // 0
-    engine.Vec4f.init(0.1, 0.3, 0.8, 1.0), // 1
-    engine.Vec4f.init(0.5, 0.8, 0.2, 1.0), // 2
-    engine.Vec4f.init(0.1, 0.2, 1, 1.0), // 3
+    engine.Vec4f.init(0.0, 1, 0.0, 1.0), // 0
+    engine.Vec4f.init(0.0, 0, 1, 1.0), // 1
+    engine.Vec4f.init(1.0, 1.0, 0.0, 1.0), // 2
+    engine.Vec4f.init(0.1, 0.1, 1, 1.0), // 3
 
-    engine.Vec4f.init(1.0, 0.5, 0.33, 1.0), // 4
-    engine.Vec4f.init(0.1, 0.45, 0.27, 1.0), // 5
+    engine.Vec4f.init(1.0, 0.0, 0.0, 1.0), // 4
+    engine.Vec4f.init(0.1, 1.0, 0.27, 1.0), // 5
     engine.Vec4f.init(1.0, 0.5, 1, 1.0), // 6
-    engine.Vec4f.init(0.1, 1, 0.11, 1.0), // 7
+    engine.Vec4f.init(0.1, 1, 0.1, 1.0), // 7
 };
 
 var modelMat = engine.Mat44f.identity();
 var viewMat = engine.Mat44f.identity();
-var mesh = createCube();
+var mesh:engine.render.Mesh = undefined; 
 var projMat:engine.Mat44f = undefined; 
 
 
 pub fn init() !void {
     projMat = engine.Mat44f.createPerspective(
-        65, 
+        50, 
         @intToFloat(f32, engine.systemConfig.renderWidth) / @intToFloat(f32, engine.systemConfig.renderHeight), 
         0.1, 
-        2000
+        1000
         );
 
-    viewMat.translate(engine.Vec4f.init(0, 0, -2.0, 0));
+    mesh = createCube();
+    viewMat.translate(engine.Vec4f.init(0, 0, -4.0, 0));
 }
 
 pub fn shutdown() !void {
@@ -83,7 +90,9 @@ pub fn shutdown() !void {
 }
 
 fn createCube() engine.render.Mesh {
-    return engine.render.Mesh.init(cubeVerts[0..], cubeTris[0..], cubeColors[0..], cubeVertNormals[0..]);
+    var m = engine.render.Mesh.init(cubeVerts[0..], cubeTris[0..], cubeColors[0..], cubeVertNormals[0..]);
+    m.recalculateNormals();
+    return m;
 }
 
 fn drawProgress(x:i16, y:i16, value:f32, max:f32) void {
@@ -103,16 +112,15 @@ pub fn update() bool
     if (input.isKeyDown(input.KeyCode.ESCAPE))
         return false;
 
-    var mvp = engine.Mat44f.identity();
-    var mv = engine.Mat44f.identity();
-
     const depth = (input.keyStateFloat(input.KeyCode.W) - input.keyStateFloat(input.KeyCode.S)) * moveSpeed;
     const horizontal = (input.keyStateFloat(input.KeyCode.A) - input.keyStateFloat(input.KeyCode.D)) * moveSpeed;
     const vertical = (input.keyStateFloat(input.KeyCode.DOWN) - input.keyStateFloat(input.KeyCode.UP)) * moveSpeed;
 
     const rot = (input.keyStateFloat(input.KeyCode.Q) - input.keyStateFloat(input.KeyCode.E)) * moveSpeed;
 
-    modelMat.mul(engine.Mat44f.rotY(0.001 * @intToFloat(f32, input.getMouseRight()) * @intToFloat(f32,input.getMouseX()) ));
+    modelMat.mul(engine.Mat44f.rotY(0.01 * (@intToFloat(f32, input.getMouseRight()) * @intToFloat(f32,input.getMouseX())/ @intToFloat(f32, engine.systemConfig.renderWidth) )));
+    modelMat.mul(engine.Mat44f.rotX(0.01 * (@intToFloat(f32, input.getMouseRight()) * @intToFloat(f32,input.getMouseY())/ @intToFloat(f32, engine.systemConfig.renderHeight) )));
+    
     viewMat.translate(engine.Vec4f.init(horizontal, vertical, depth, 0));
 
     _=engine.sys.showMouseCursor(~input.getMouseRight());
