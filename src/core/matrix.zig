@@ -191,10 +191,10 @@ pub const Mat44f = struct {
 
     pub fn print(self:Mat44f) void {
         std.debug.warn("\n[\n",.{});
-        self.mm[0].print();
-        self.mm[1].print();
-        self.mm[2].print();
-        self.mm[3].print();
+        self.mm[0].println();
+        self.mm[1].println();
+        self.mm[2].println();
+        self.mm[3].println();
         std.debug.warn("]\n",.{});
     }
 };

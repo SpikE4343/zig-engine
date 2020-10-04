@@ -39,7 +39,8 @@ pub const Vec4f = struct {
   }
 
   pub fn right() Vec4f{
-    return Vec4f.init(1,0,0,1);
+    return Vec4f.init(1,0,0,1
+    );
   }
 
   pub inline fn set(self:*Vec4f, other:Vec4f) void 
@@ -75,9 +76,12 @@ pub const Vec4f = struct {
 
   pub inline fn addDup(self:Vec4f, other:Vec4f) Vec4f
   {
-    var out = self;
-    out.add(other);
-    return out;
+    return Vec4f.init(
+      self.x + other.x,
+      self.y + other.y,
+      self.z + other.z,
+      self.w + other.w
+    );
   }
 
   pub inline fn mul(self:*Vec4f, other:Vec4f) void 
@@ -181,6 +185,12 @@ pub const Vec4f = struct {
     self.w -= other.w;
   }
 
+  pub inline fn subDup(self:Vec4f, other:Vec4f) Vec4f {
+    var out = self;
+    out.sub(other);
+    return out;
+  }
+
   pub inline fn subScalar(self:*Vec4f, scalar:f32) void {
     self.x -= scalar;
     self.y -= scalar;
@@ -190,12 +200,12 @@ pub const Vec4f = struct {
 
   /// Returns vector length
   pub inline fn length(self:Vec4f) f32 {
-    return math.sqrt(self.lengthSqr());
+    return math.sqrt(self.x*self.x + self.y*self.y + self.z*self.z + self.w*self.w);
   }
 
   /// return length of vector squared. Avoids `math.sqrt`
   pub inline fn lengthSqr(self:Vec4f) f32 {
-    return self.dot(self);
+    return self.x*self.x + self.y*self.y + self.z*self.z + self.w*self.w;
   }
 
   /// make `length` of vector 1.0 while maintaining direction
@@ -220,12 +230,12 @@ pub const Vec4f = struct {
 
   /// return length of vector squared. Avoids `math.sqrt`
   pub inline fn length3Sqr(self:Vec4f) f32 {
-    return self.dot3(self);
+    return self.x*self.x + self.y*self.y + self.z*self.z;
   }
 
   /// make `length` of vector 1.0 while maintaining direction
   pub inline fn normalize3(self:*Vec4f) void {
-    self.div3(self.length3());
+    self.div3(math.sqrt(self.x*self.x + self.y*self.y + self.z*self.z));
   }
 
   /// constant version of normalize that returns a new `Vec4f` with length of 1.0
@@ -263,6 +273,21 @@ pub const Vec4f = struct {
 
   pub fn println(self:Vec4f) void {
     std.debug.warn(" [{}, {}, {}, {} | {} | {} ]\n", .{self.x, self.y, self.z, self.w, self.length(), self.length3()});      
+  }
+
+  pub fn eq(self:Vec4f, other:Vec4f, epsilon:f32) bool {
+    return 
+      (math.fabs(self.x - other.x) < epsilon) and
+      (math.fabs(self.y - other.y) < epsilon) and
+      (math.fabs(self.z - other.z) < epsilon) and
+      (math.fabs(self.w - other.w) < epsilon);
+  }
+
+  pub fn eq3(self:Vec4f, other:Vec4f, epsilon:f32) bool {
+    return 
+      (math.fabs(self.x - other.x) < epsilon) and
+      (math.fabs(self.y - other.y) < epsilon) and
+      (math.fabs(self.z - other.z) < epsilon);
   }
 };
 

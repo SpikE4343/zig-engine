@@ -51,6 +51,11 @@ pub const Profile = struct {
     return id;
   }
 
+  pub fn sampleTime(self:*Profile, id:u32) i64 
+  {
+    return self.samples[id].end - self.samples[id].begin;
+  }
+
   // Stop tracking wall clock timing
   pub fn endSample(self:*Profile, id:u32) void {
     const d = @atomicRmw(u8, &self.depth, .Sub, 1, .SeqCst);
@@ -138,6 +143,10 @@ pub const Sampler = struct {
 
   pub fn end(self:*Sampler) void {
     self.owner.endSample(self.id);
+  }
+
+  pub fn value(self:*Sampler) i64 {
+    return self.owner.sampleTime(self.id);
   }
 };
 

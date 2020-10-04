@@ -33,6 +33,7 @@ pub const Config = struct
   renderHeight : u16,
 
   maxFps : u16,
+  fullscreen : bool,
 
   pub inline fn targetDt(self:Config) u16 {
     return 1000 / config.maxFps;
@@ -48,7 +49,8 @@ var config = Config{
   .windowHeight = 600,
   .renderWidth = 800,
   .renderHeight = 600,
-  .maxFps = 60
+  .maxFps = 60,
+  .fullscreen = false,
 };
 
 pub fn init(cfg:Config) !void 
@@ -60,13 +62,17 @@ pub fn init(cfg:Config) !void
         return error.SDLInitializationFailed;
     }
 
+    var flags = c.SDL_WINDOW_OPENGL | c.SDL_WINDOW_RESIZABLE;
+    if( config.fullscreen)
+      flags |= c.SDL_WINDOW_FULLSCREEN_DESKTOP;
+
     window = c.SDL_CreateWindow(
       "zig-engine", 
       SDL_WINDOWPOS_UNDEFINED, 
       SDL_WINDOWPOS_UNDEFINED, 
       @intCast(c_int, config.windowWidth), 
       @intCast(c_int, config.windowHeight), 
-      c.SDL_WINDOW_OPENGL | c.SDL_WINDOW_RESIZABLE) // c.SDL_WINDOW_FULLSCREEN_DESKTOP ) //c.SDL_WINDOW_RESIZABLE)
+      @intCast(u32, flags)) // c.SDL_WINDOW_FULLSCREEN_DESKTOP ) //c.SDL_WINDOW_RESIZABLE)
         orelse
         {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());

@@ -12,6 +12,9 @@ const Mat44f = @import("../core/matrix.zig").Mat44f;
 
 const Profile = @import("../core/profiler.zig").Profile;
 
+const Mesh = @import("../render/mesh.zig").Mesh;
+const MeshObjLoader = @import("../render/obj_mesh_loader.zig");
+
 /// RGBA 32 bit color value
 pub const Color = struct {
     color: [4]u8 = [4]u8{ 0, 0, 0, 0 },
@@ -89,83 +92,11 @@ pub fn scale(a: Vec2, b: f64) Vec2 {
     };
 }
 
-pub const Mesh = struct {
-    vertexBuffer: []Vec4f,
-    vertexNormalBuffer: []Vec4f,
-    indexBuffer: []u16,
-    colorBuffer: []Vec4f,
 
-    pub fn init(verts: []Vec4f, indicies: []u16, colors: []Vec4f, vertNormals: []Vec4f) Mesh {
-        return Mesh{
-            .vertexBuffer = verts,
-            .indexBuffer = indicies,
-            .colorBuffer = colors,
-            .vertexNormalBuffer = vertNormals,
-        };
-    }
-
-    pub fn recalculateNormals(self:*Mesh) void 
-    {
-      const ids = self.indexBuffer.len;
-      const numTris = ids / 3;
-
-      var tri:u16 = 0;
-      while (tri < ids) 
-      {
-        const vi0 = self.indexBuffer[tri + 0];
-        const vi1 = self.indexBuffer[tri + 1];
-        const vi2 = self.indexBuffer[tri + 2];
-
-        const v0 = self.vertexBuffer[vi0];
-        const v1 = self.vertexBuffer[vi1];
-        const v2 = self.vertexBuffer[vi2];
-
-        var e0 = v1;
-        var e1 = v2;
-        
-        e0.sub(v0);
-        e1.sub(v0);
-
-        // e0.normalize3();
-        // e1.normalize3();
-
-        const rnormal = e0.cross3(e1);
-        const normal = rnormal.normalized3();
-
-        self.vertexNormalBuffer[vi0].add(normal);
-        //self.vertexNormalBuffer[vi0].div3(2);
-
-        self.vertexNormalBuffer[vi0].w = 1;
-
-
-        self.vertexNormalBuffer[vi1].add(normal);
-        self.vertexNormalBuffer[vi1].normalize3();
-        //self.vertexNormalBuffer[vi1].div3(2);
-        self.vertexNormalBuffer[vi1].w = 1;
-
-        self.vertexNormalBuffer[vi2].add(normal);
-        self.vertexNormalBuffer[vi2].normalize3();
-        //self.vertexNormalBuffer[vi2].div3(2);
-        self.vertexNormalBuffer[vi2].w = 1;
-
-        tri += 3;
-      }
-
-      tri = 0;
-      while(tri < self.vertexNormalBuffer.len)
-      {
-        warn("\n[{}] : ", .{tri});
-        //self.vertexNormalBuffer[tri].normalize3();
-        self.vertexNormalBuffer[tri].print();
-        //self.vertexNormalBuffer[tri].div3(self.vertexNormalBuffer[tri].w);
-        tri += 1;
-      }
-    }
-};
 
 // TODO: allocate from heap
 const PixelBuffers = struct {
-    const pixelsCapacity = 800 * 600;
+    const pixelsCapacity = 2000 * 2000;
     buffers: [2][pixelsCapacity]Color,
     depthBuffer: [pixelsCapacity]f32,
     frontIndex: usize,
@@ -482,11 +413,12 @@ pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mes
     var sp = profile.?.beginSample("render.mesh.draw");
     defer profile.?.endSample(sp);
 
-    var mv = v.*;
-    mv.mul(m.*);
+    var mv = m.*;
+    mv.mul(v.*);
 
     var mvp = p.*;
-    mvp.mul(mv);
+    mvp.mul(v.*);
+    mvp.mul(m.*);
 
     const ids = mesh.indexBuffer.len;
     const numTris = ids / 3;
@@ -511,7 +443,12 @@ pub fn triEdge(a: Vec4f, b: Vec4f, c: Vec4f) f32 {
 }
 
 pub fn applyVertexShader(mvp: *const Mat44f, index: u16, v: Vec4f) Vec4f {
-    var out = mvp.mul33_vec4(v);
+    var out = mvp.mul_vec4(v);
+    return out;
+}
+
+pub fn projectVertex(p: *const Mat44f, v: Vec4f) Vec4f {
+    var out = p.mul33_vec4(v);
     const hW = @intToFloat(f32, pixels.w) / 2;
     const hH = @intToFloat(f32, pixels.h) / 2;
 
@@ -553,7 +490,7 @@ pub inline fn uncharted2_tonemap_partial(x:Vec4f) Vec4f
 
 pub inline fn uncharted2_filmic(v:Vec4f) Vec4f
 {
-    const exposure_bias = 1.0;
+    const exposure_bias = 2.0;
     const curr = uncharted2_tonemap_partial(v.scaleDup(exposure_bias));
 
     const W = Vec4f.init(11.2,11.2,11.2,0);
@@ -565,7 +502,7 @@ pub inline fn uncharted2_filmic(v:Vec4f) Vec4f
 pub fn applyPixelShader(mvp: *const Mat44f, pixel: Vec4f, worldPixel: Vec4f, color: Vec4f, normal:Vec4f, lightDir:Vec4f) Vec4f {
     return uncharted2_filmic( 
         color.scaleDup(
-            std.math.max(normal.dot3(lightDir)*50, 1))
+            std.math.max(normal.dot3(lightDir), 0.4))
             );
 }
 
@@ -604,9 +541,14 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
 
     var vp = view.*;
     vp.mul(proj.*);
-    const rv0 = mesh.vertexBuffer[mesh.indexBuffer[offset + 0]];
-    const rv1 = mesh.vertexBuffer[mesh.indexBuffer[offset + 1]];
-    const rv2 = mesh.vertexBuffer[mesh.indexBuffer[offset + 2]];
+
+    const vi0 = mesh.indexBuffer[offset + 0];
+    const vi1 = mesh.indexBuffer[offset + 1];
+    const vi2 = mesh.indexBuffer[offset + 2];
+
+    const rv0 = mesh.vertexBuffer[vi0];
+    const rv1 = mesh.vertexBuffer[vi1];
+    const rv2 = mesh.vertexBuffer[vi2];
 
     // cull back facing triangles
     const mv0 = mv.mul33_vec4(rv0);
@@ -626,9 +568,9 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
     if( bfc > 0.0000000000001)
         return;
 
-    const v0 = applyVertexShader(mvp, offset + 0, rv0);
-    const v1 = applyVertexShader(mvp, offset + 1, rv1);
-    const v2 = applyVertexShader(mvp, offset + 2, rv2);
+    const v0 = projectVertex(proj, applyVertexShader(mv, offset + 0, rv0));
+    const v1 = projectVertex(proj, applyVertexShader(mv, offset + 1, rv1));
+    const v2 = projectVertex(proj, applyVertexShader(mv, offset + 2, rv2));
 
     
     const area = triEdge(v0, v1, v2);
@@ -640,9 +582,9 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
     const wv1 = model.mul_vec4(rv1);
     const wv2 = model.mul_vec4(rv2);
 
-    const c0 = mesh.colorBuffer[mesh.indexBuffer[offset + 0]];
-    const c1 = mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
-    const c2 = mesh.colorBuffer[mesh.indexBuffer[offset + 2]];
+    const c0 = rv0.scaleDup(0.5);//Vec4f.init(rv0.x,0,0,1); // mesh.vertexNormalBuffer[vi0];
+    const c1 = rv1.scaleDup(0.5);//Vec4f.init(0,rv0.y,0,1); // mesh.vertexNormalBuffer[vi1];//mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
+    const c2 = rv2.scaleDup(0.5);//Vec4f.init(0,0,rv0.z,1); // mesh.vertexNormalBuffer[vi2];//mesh.colorBuffer[mesh.indexBuffer[offset + 2]];
 
 
     var we0 = wv1;
@@ -651,14 +593,14 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
     we0.sub(wv0);// cull back facing triangles
     we1.sub(wv0);
 
-    we0.normalize3();
-    we1.normalize3();
+    //we0.normalize3();
+    //we1.normalize3();
 
-    const worldNormalTri = we1.cross3(we0).normalized3();
+    const worldNormalTri = we0.cross3(we1).normalized3();
 
-    const n0 = mesh.vertexNormalBuffer[mesh.indexBuffer[offset + 0]];
-    const n1 = mesh.vertexNormalBuffer[mesh.indexBuffer[offset + 1]];
-    const n2 = mesh.vertexNormalBuffer[mesh.indexBuffer[offset + 2]];
+    const n0 = mesh.vertexNormalBuffer[mesh.indexNormalBuffer[offset + 0]];
+    const n1 = mesh.vertexNormalBuffer[mesh.indexNormalBuffer[offset + 1]];
+    const n2 = mesh.vertexNormalBuffer[mesh.indexNormalBuffer[offset + 2]];
 
     const wn0 = model.mul33_vec4(n0);
     const wn1 = model.mul33_vec4(n1);
@@ -794,35 +736,23 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
         }
     }
 
-    var de0 = rv1;
-    var de1 = rv2;
-    
-    de0.sub(rv0);
-    de1.sub(rv0);
-
-    // de0.normalize();
-    // de1.normalize();
-
    
-    const dtriNormal = de0.cross3(de1);
-    // //dtriNormal.print();
 
+    // var center = mv0.addDup(mv1);
+    // center.add(mv2);
+    // center.div(3);
 
-    var center = rv0.addDup(rv1);
-    center.add(rv2);
-    center.div(3);
+    // // drawWorldLine(mvp, de0, rv0, Vec4f.init(0,1,0,1));
+    // // drawWorldLine(mvp, rv0, de1, Vec4f.init(0,0,1,0));
 
-    // drawWorldLine(mvp, de0, rv0, Vec4f.init(0,1,0,1));
-    // drawWorldLine(mvp, rv0, de1, Vec4f.init(0,0,1,0));
-
-    //drawWorldLine()
-    drawWorldLine(mvp, center, center.addDup(dtriNormal), Vec4f.init(0,0,1,1));
+    // //drawWorldLine()
+    // drawWorldLine(proj, center, center.addDup(triNormal), Vec4f.init(0,0,1,1));
     
-    drawWorldLine(mvp, rv0, rv0.addDup(n0), Vec4f.init(1,0,0,1));
+    // drawWorldLine(mvp, rv0, rv0.addDup(n0), Vec4f.init(1,0,0,1));
 
-    drawWorldLine(mvp, rv1, rv1.addDup(n1), Vec4f.init(0,1,0,1));
+    // drawWorldLine(mvp, rv1, rv1.addDup(n1), Vec4f.init(0,1,0,1));
 
-    drawWorldLine(mvp, rv2, rv2.addDup(n2), Vec4f.init(0,0,1,1));
+    // drawWorldLine(mvp, rv2, rv2.addDup(n2), Vec4f.init(0,0,1,1));
 }
 
 pub fn writePixel(x: i32, y: i32, z: f32, c: Color) void {
