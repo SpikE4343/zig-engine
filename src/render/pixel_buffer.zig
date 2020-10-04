@@ -490,7 +490,7 @@ pub inline fn uncharted2_tonemap_partial(x:Vec4f) Vec4f
 
 pub inline fn uncharted2_filmic(v:Vec4f) Vec4f
 {
-    const exposure_bias = 4.0;
+    const exposure_bias = 2.0;
     const curr = uncharted2_tonemap_partial(v.scaleDup(exposure_bias));
 
     const W = Vec4f.init(11.2,11.2,11.2,0);
@@ -502,7 +502,7 @@ pub inline fn uncharted2_filmic(v:Vec4f) Vec4f
 pub fn applyPixelShader(mvp: *const Mat44f, pixel: Vec4f, worldPixel: Vec4f, color: Vec4f, normal:Vec4f, lightDir:Vec4f) Vec4f {
     return uncharted2_filmic( 
         color.scaleDup(
-            std.math.max(normal.dot3(lightDir)*4, 0.4))
+            std.math.max(normal.dot3(lightDir), 0.4))
             );
 }
 
@@ -577,11 +577,6 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
 
     if (area <= 0)
         return;
-
-    // TODO: clipping
-    if( v0.z < 0.1 or v1.z < 0.1 or v2.z < 0.1)
-        return;
-
 
     const wv0 = model.mul_vec4(rv0);
     const wv1 = model.mul_vec4(rv1);

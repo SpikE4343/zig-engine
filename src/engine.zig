@@ -22,14 +22,14 @@ pub const MeshObjLoader = @import("render/obj_mesh_loader.zig");
 pub var stdout = std.io.getStdOut();
 
 
-// pub const systemConfig = sys.Config{
-//   .windowWidth = 1024,
-//   .windowHeight = 768,
-//   .renderWidth = 320,
-//   .renderHeight = 240,
-//   .maxFps = 60,
-//   .fullscreen = false,
-// };
+pub const systemConfig = sys.Config{
+  .windowWidth = 1024,
+  .windowHeight = 768,
+  .renderWidth = 320,
+  .renderHeight = 240,
+  .maxFps = 60,
+  .fullscreen = false,
+};
 
 // pub const systemConfig = sys.Config{
 //   .windowWidth = 1920,
@@ -41,14 +41,14 @@ pub var stdout = std.io.getStdOut();
 // };
 
 
-pub const systemConfig = sys.Config{
-  .windowWidth = 1920,
-  .windowHeight = 1080,
-  .renderWidth = 426,
-  .renderHeight = 240,
-  .maxFps = 60,
-  .fullscreen = true,
-};
+// pub const systemConfig = sys.Config{
+//   .windowWidth = 1920,
+//   .windowHeight = 1080,
+//   .renderWidth = 426,
+//   .renderHeight = 240,
+//   .maxFps = 60,
+//   .fullscreen = true,
+// };
 
 pub fn main() !void {
 
