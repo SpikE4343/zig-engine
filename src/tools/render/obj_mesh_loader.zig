@@ -6,11 +6,11 @@ const math = std.math;
 const io = std.io;
 const Allocator = std.mem.Allocator;
 
-const Vec4f = @import("../core/vector.zig").Vec4f;
-const Mat44f = @import("../core/matrix.zig").Mat44f;
-const Profile = @import("../core/profiler.zig").Profile;
+const Vec4f = @import("../../core/vector.zig").Vec4f;
+const Mat44f = @import("../../core/matrix.zig").Mat44f;
+const Profile = @import("../../core/profiler.zig").Profile;
 
-const Mesh = @import("mesh.zig").Mesh;
+const Mesh = @import("../../render/mesh.zig").Mesh;
 
 const NewLine = 0x0A;
 const WhiteSpace = 0x20;
@@ -278,7 +278,7 @@ pub fn importObjFile(allocator: *Allocator, file_path: []const u8) !Mesh
     triVerts.toOwnedSlice(), 
     triNormals.toOwnedSlice(),
     triUvs.toOwnedSlice(),
-    undefined, 
+    undefined, // vertex colors
     normals.toOwnedSlice(),
     texCoords.toOwnedSlice(),
     );

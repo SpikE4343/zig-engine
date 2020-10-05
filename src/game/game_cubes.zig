@@ -6,116 +6,8 @@ const assert = std.debug.assert;
 
 // engine imports
 const engine = @import("../engine.zig");
+const tools = @import("../tools.zig");
 const input = engine.input;
-
-
-
-const w = 0.5;
-
-
-var cubeVerts = [_]engine.Vec4f{
-    engine.Vec4f.init(-w,  w,  w, 1.0), // 0
-    engine.Vec4f.init(-w, -w,  w, 1.0), // 1
-    engine.Vec4f.init(-w,  w, -w, 1.0), // 2
-    engine.Vec4f.init(-w, -w, -w, 1.0), // 3
-
-    engine.Vec4f.init( w,  w,  w, 1.0), // 4
-    engine.Vec4f.init( w, -w,  w, 1.0), // 5
-    engine.Vec4f.init( w,  w, -w, 1.0), // 6
-    engine.Vec4f.init( w, -w, -w, 1.0), // 7
-};
-
-var cubeVertNormals = [_]engine.Vec4f{
-    engine.Vec4f.init(-0.5773, -0.5773, -0.5773, 0.0), // 0
-    engine.Vec4f.init( 0.5773, -0.5773, -0.5773, 0.0), // 1
-    engine.Vec4f.init( 0.5773, -0.5773,  0.5773, 0.0), // 2
-    engine.Vec4f.init(-0.5773, -0.5773,  0.5773, 0.0), // 3
-    engine.Vec4f.init(-0.5773, 0.5773,  0.5773, 0.0), // 4
-    engine.Vec4f.init( 0.5773, 0.5773,  0.5773, 0.0), // 5
-    engine.Vec4f.init( 0.5773, 0.5773, -0.5773, 0.0), // 6
-    engine.Vec4f.init(-0.5773, 0.5773, -0.5773, 0.0), // 7
-    
-
-    
-    
-    
-};
-
-// vn 0.5773 0.5773 -0.5773
-// vn -0.5773 0.5773 -0.5773
-// vn -0.5773 0.5773 0.5773
-// vn 0.5773 0.5773 0.5773
-
-// vn 0.5773 -0.5773 0.5773
-// vn -0.5773 -0.5773 0.5773
-// vn -0.5773 -0.5773 -0.5773
-// vn 0.5773 -0.5773 -0.5773
-
-var cubeVertUVs = [_]engine.Vec4f{
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0),
-
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0),
-};
-
-// indicies
-var cubeTris = [_]u16{
-    4, 2, 0,
-    2, 7, 3,
-
-    6, 5, 7,
-    1, 7, 5,
-    
-    0, 3, 1,
-    4, 1, 5,
-    
-    4, 6, 2,
-    2, 6, 7,
-    
-    6, 4, 5,
-    1, 3, 7,
-    
-    0, 2, 3,
-    4, 0, 1,
-};
-
-var cubeTriNormals = [_]engine.Vec4f{
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0),
-
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0),
-
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0),
-
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    
-    engine.Vec4f.init(0, 0, 0, 1.0), 
-    engine.Vec4f.init(0, 0, 0, 1.0),
-};
-
-// colors
-var cubeColors = [_]engine.Vec4f{
-    engine.Vec4f.init(0.0, 1, 0.0, 1.0), // 0
-    engine.Vec4f.init(0.0, 0, 1, 1.0), // 1
-    engine.Vec4f.init(1.0, 1.0, 0.0, 1.0), // 2
-    engine.Vec4f.init(0.1, 0.1, 1, 1.0), // 3
-
-    engine.Vec4f.init(1.0, 0.0, 0.0, 1.0), // 4
-    engine.Vec4f.init(0.1, 1.0, 0.27, 1.0), // 5
-    engine.Vec4f.init(1.0, 0.5, 1, 1.0), // 6
-    engine.Vec4f.init(0.1, 1, 0.1, 1.0), // 7
-};
 
 var modelMat = engine.Mat44f.identity();
 var viewMat = engine.Mat44f.identity();
@@ -132,9 +24,9 @@ pub fn init() !void {
         1000
         );
 
-    //mesh = try engine.MeshObjLoader.importObjFile(meshAllocator, "../../assets/cube.obj");
-    //mesh = try engine.MeshObjLoader.importObjFile(meshAllocator, "../../assets/bed.obj");
-    mesh = try engine.MeshObjLoader.importObjFile(meshAllocator, "../../assets/suzanne.obj");
+    //mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/cube.obj");
+    //mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/bed.obj");
+    mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/suzanne.obj");
 
     viewMat.translate(engine.Vec4f.init(0, 0, -4.0, 0));
 }
@@ -143,16 +35,6 @@ pub fn shutdown() !void {
     
 }
 
-fn createCube() engine.render.Mesh {
-    var m = engine.render.Mesh.init(
-      cubeVerts[0..], 
-      cubeTris[0..], 
-      cubeColors[0..], 
-      cubeVertNormals[0..]
-      );
-    //m.recalculateNormals();
-    return m;
-}
 
 fn drawProgress(x:i16, y:i16, value:f32, max:f32) void {
   const cs = std.math.clamp(value, 0.0, max)/max;

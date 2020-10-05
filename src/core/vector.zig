@@ -289,6 +289,27 @@ pub const Vec4f = struct {
       (math.fabs(self.y - other.y) < epsilon) and
       (math.fabs(self.z - other.z) < epsilon);
   }
+
+  pub fn triArea(a: Vec4f, b: Vec4f, c: Vec4f) f32 {
+    return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
+  }
+
+  pub fn triCoords(v0:Vec4f, v1:Vec4f, v2:Vec4f, p:Vec4f) Vec4f {
+    return Vec4f.init(
+      triArea(v1, v2, p),
+      triArea(v2, v0, p),
+      triArea(v0, v1, p),
+      0
+    );
+  }
+
+  pub fn triInterp(tri:Vec4f, v0:Vec4f, v1:Vec4f, v2:Vec4f, depth:f32, w:f32) Vec4f {
+    return Vec4f.init(
+      (tri.x * v0.x + tri.y * v1.x + tri.z * v2.x) / depth,
+      (tri.x * v0.y + tri.y * v1.y + tri.z * v2.y) / depth,
+      (tri.x * v0.z + tri.y * v1.z + tri.z * v2.z) / depth,
+      w);
+  }
 };
 
 const assert = @import("std").debug.assert;

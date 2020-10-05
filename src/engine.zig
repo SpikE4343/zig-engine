@@ -17,10 +17,10 @@ pub const Profile = @import("core/profiler.zig").Profile;
 pub const Sampler = @import("core/profiler.zig").Sampler;
 
 pub const Mesh = @import("render/mesh.zig").Mesh;
-pub const MeshObjLoader = @import("render/obj_mesh_loader.zig");
 
 pub var stdout = std.io.getStdOut();
 
+var bufferAllocator = std.heap.page_allocator;
 
 pub const systemConfig = sys.Config{
   .windowWidth = 1024,
@@ -58,7 +58,7 @@ pub fn main() !void {
     try sys.init(systemConfig);
     defer sys.shutdown();
 
-    try render.init(systemConfig.renderWidth, systemConfig.renderHeight, &profiler);
+    try render.init(systemConfig.renderWidth, systemConfig.renderHeight, bufferAllocator, &profiler);
     defer render.shutdown();
 
     const bufferLineSize = render.bufferLineSize();
