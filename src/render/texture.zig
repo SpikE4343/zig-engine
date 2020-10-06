@@ -32,15 +32,15 @@ pub const Texture = struct {
   }
 
   pub fn sample(self:Texture, x:f32, y:f32) Vec4f {
-    const tx = @floatToInt(usize, x * self.width);
-    const ty = @floatToInt(usize, y * self.height);
+    const tx = @floatToInt(usize, x * @intToFloat(f32,self.width));
+    const ty = @floatToInt(usize, y * @intToFloat(f32,self.height));
     const index = ty * self.width + tx;
 
     return Vec4f.init(
-      sampleR(index),
-      sampleG(index),
-      sampleB(index),
-      sampleA(index)
+      self.sampleR(index),
+      self.sampleG(index),
+      self.sampleB(index),
+      self.sampleA(index)
     );
   }
 
@@ -49,7 +49,7 @@ pub const Texture = struct {
   pub fn sampleR(self:Texture, index:usize) f32 {
     return switch(self.format){
       .GRAY8, .RGB8, .RGBA8 => @intToFloat(f32, self.colors[index])/255.0,
-      else => 0.0
+      //else => 0.0
     };
   }
 
@@ -57,7 +57,7 @@ pub const Texture = struct {
     return switch(self.format){
       .GRAY8 => @intToFloat(f32, self.colors[pixel])/255.0,
       .RGB8, .RGBA8 => @intToFloat(f32, self.colors[pixel+1])/255.0,
-      else => 0.0
+      //else => 0.0
     };
   }
 
@@ -65,7 +65,7 @@ pub const Texture = struct {
     return switch(self.format){
       .GRAY8 => @intToFloat(f32, self.colors[pixel])/255.0,
       .RGB8, .RGBA8 => @intToFloat(f32, self.colors[pixel+2])/255.0,
-      else => 0.0
+      //else => 0.0
     };
   }
 
@@ -73,7 +73,7 @@ pub const Texture = struct {
     return switch(self.format){
       .RGB8, .GRAY8 => 1.0,
       .RGBA8 => @intToFloat(f32, self.colors[pixel+3])/255.0,
-      else => 0.0
+      //else => 0.0
     };
   }
 

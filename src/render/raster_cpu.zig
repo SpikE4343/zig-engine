@@ -14,7 +14,8 @@ const Profile = @import("../core/profiler.zig").Profile;
 
 const Mesh = @import("mesh.zig").Mesh;
 const PixelBuffer = @import("pixel_buffer.zig").PixelBuffer;
-const Material = @import("material.zig").Material;
+pub const material = @import("material.zig");
+pub const Material = material.Material;
 
 /// RGBA 32 bit color value
 pub const Color = struct {
@@ -166,7 +167,7 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
     depthBuffer = try PixelBuffer(f32).init(renderWidth, renderHeight, allocator);
 }
 
-pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, material: *Material) void {
+pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, shader: *Material) void {
     var sp = profile.?.beginSample("render.mesh.draw");
     defer profile.?.endSample(sp);
 
@@ -182,12 +183,12 @@ pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mes
 
     var t: u16 = 0;
     while (t < ids) {
-        drawTri(m, v, p, &mv, &mvp, t, mesh, material);
+        drawTri(m, v, p, &mv, &mvp, t, mesh, shader);
         t += 3;
     }
 }
 
-pub fn drawPointMesh(mvp: *const Mat44f, mesh: *Mesh, material:*Material) void {
+pub fn drawPointMesh(mvp: *const Mat44f, mesh: *Mesh, shader:*Material) void {
     const ids = mesh.vertexBuffer.len;
 
     for (mesh.vertexBuffer) |vertex, i| {
@@ -318,7 +319,7 @@ pub fn drawTri(
   mvp: *const Mat44f, 
   offset: u16, 
   mesh: *Mesh,
-  material: *Material) void {
+  shader: *Material) void {
     var sp = profile.?.beginSample("render.mesh.draw.tri");
     defer profile.?.endSample(sp);
 
@@ -351,9 +352,14 @@ pub fn drawTri(
     if( bfc > 0.0000000000001)
         return;
 
-    const v0 = material.projectShader(proj, material.vertexShader(mv, offset + 0, rv0));
-    const v1 = material.projectShader(proj, material.vertexShader(mv, offset + 1, rv1));
-    const v2 = material.projectShader(proj, material.vertexShader(mv, offset + 2, rv2));
+    const viewport = Vec4f.init(
+        @intToFloat(f32, colorBuffer.w), 
+        @intToFloat(f32, colorBuffer.h), 
+        0, 0);
+
+    const v0 = shader.projectionShader(proj, shader.vertexShader(mv, offset + 0, rv0, shader), viewport, shader);
+    const v1 = shader.projectionShader(proj, shader.vertexShader(mv, offset + 1, rv1, shader), viewport, shader);
+    const v2 = shader.projectionShader(proj, shader.vertexShader(mv, offset + 2, rv2, shader), viewport, shader);
 
     
     const area = Vec4f.triArea(v0, v1, v2);
@@ -405,14 +411,9 @@ pub fn drawTri(
     const wn1 = model.mul33_vec4(n1);
     const wn2 = model.mul33_vec4(n2);
 
+    
 
-    const renderBounds = Bounds.init(
-      Vec4f.init(0, 0, 0, 0), 
-      Vec4f.init(
-        @intToFloat(f32, colorBuffer.w), 
-        @intToFloat(f32, colorBuffer.h), 
-        0, 0)
-      );
+    const renderBounds = Bounds.init(Vec4f.zero(), viewport);
 
     var bounds = Bounds.init(v0, v0);
     bounds.add(v0);
@@ -435,7 +436,7 @@ pub fn drawTri(
     var uv: Vec4f = Vec4f.init(0, 0, 0, 1);
     var c: Color = Color.black();
     
-    const lightDir = Vec4f.init(-0.913913,0.389759,-0.113369, 1).normalized3();
+    
     
     while (y <= bounds.max.y) 
     {
@@ -462,7 +463,7 @@ pub fn drawTri(
             // of the point on the 3D triangle that the pixel overlaps.
             const z = (tri.x * v0.z + tri.y * v1.z + tri.z * v2.z);
 
-            if (material.depthTest == 1 and depthBuffer.setLessThan(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
+            if (shader.depthTest == 1 and depthBuffer.setLessThan(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
                 continue;
 
             p.z = z;
@@ -472,7 +473,7 @@ pub fn drawTri(
             pixelNormal = Vec4f.triInterp(tri, wn0, wn1, wn2, 1.0, 1.0);
             uv = Vec4f.triInterp(tri, uv0, uv1, uv2, 1.0, 1.0);
 
-            var vc = material.pixelShader(mvp, p, fbc, pixelNormal, uv);
+            var vc = shader.pixelShader(mvp, p, fbc, pixelNormal, uv, shader);
 
             if(vc.w <= 0.0)
               continue;

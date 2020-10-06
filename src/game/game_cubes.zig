@@ -9,6 +9,8 @@ const engine = @import("../engine.zig");
 const tools = @import("../tools.zig");
 const input = engine.input;
 
+const matfuncs = engine.render.material;
+
 var modelMat = engine.Mat44f.identity();
 var viewMat = engine.Mat44f.identity();
 var mesh:engine.Mesh = undefined; 
@@ -16,12 +18,9 @@ var projMat:engine.Mat44f = undefined;
 
 var meshAllocator = std.heap.page_allocator;
 var textureAllocator = std.heap.page_allocator;
+var meshMaterial:engine.render.Material = undefined;
 
 
-var material = engine.render.Material{
-    .lighDirection = Vec4f.init(-0.913913,0.389759,-0.113369, 1).normalized3(),
-    .lightColorIntensity = Vec4f.one().scaleDup(0.5),
-};
 
 pub fn init() !void {
     projMat = engine.Mat44f.createPerspective(
@@ -34,9 +33,19 @@ pub fn init() !void {
     //mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/cube.obj");
     //mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/bed.obj");
     mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/suzanne.obj");
-
     var  texture = try tools.TgaTexLoader.importTGAFile(textureAllocator, "../../assets/black_rock.tga");
 
+    meshMaterial = engine.render.Material {
+      .depthTest = 1,
+      .lightDirection = engine.Vec4f.init(-0.913913,0.389759,-0.113369, 1).normalized3(),
+      .lightColor = engine.Vec4f.one(),
+      .lightIntensity = 20,
+      .vertexShader = applyVertexShader,
+      .projectionShader = projectVertex,
+      .pixelShader = applyPixelShader,
+      .texture = texture,
+    };
+    
     viewMat.translate(engine.Vec4f.init(0, 0, -4.0, 0));
 }
 
@@ -82,6 +91,8 @@ pub fn update() bool
 
     const rot = (input.keyStateFloat(input.KeyCode.Q) - input.keyStateFloat(input.KeyCode.E)) * moveSpeed;
 
+
+
     const rightButton = @intToFloat(f32, input.getMouseRight());
 
     const yaw = mouseDelta.x;
@@ -89,46 +100,25 @@ pub fn update() bool
 
     currentMouse.z = yaw;
     currentMouse.w = pitch;
-    
-    // mousePos.println();
-    // currentMouse.println();
-    // mouseDelta.println();
-  
+
+    const bright = input.keyStateFloat(input.KeyCode.I) - input.keyStateFloat(input.KeyCode.K) * 0.1;
+    meshMaterial.lightIntensity = std.math.max(meshMaterial.lightIntensity + bright, 0.0 );
 
     mousePos = currentMouse;
-    //var forward = viewMat.col(2);
-
-    //viewMat.print();
-    //const forward = viewMat.mul33_vec4(engine.Vec4f.forward()).normalized3();
-    // forward.print();
     var trans = engine.Mat44f.identity();
     
     //trans.mul33(viewMat);
     trans.translate(engine.Vec4f.init(horizontal, vertical, depth, 0));
-    //viewMat.translate(forward.scaleDup(1));
-    //viewMat.print();
-
     trans.mul(engine.Mat44f.rotX(rightButton * pitch));
-    trans.mul(engine.Mat44f.rotY(rightButton * yaw));
-    
+    trans.mul(engine.Mat44f.rotY(rightButton * yaw));    
     trans.mul(viewMat);
-    
-    
-    //viewMat.print();
-    
+
     viewMat = trans;
   
     
 
     _=engine.sys.showMouseCursor(~input.getMouseRight());
-    //_=engine.sys.setCaptureMouse(input.getMouseRight());
     _=engine.sys.setRelativeMouseMode(input.getMouseRight());
-
-    //modelMat.mul(Mat44f.rotX(0.01));
-    //modelMat.mul(engine.Mat44f.rotY(rot));
-    //modelMat.mul(Mat44f.rotZ(0.001));
-
-    
 
     {
         // var srenderDraw = engine.Sampler.begin(&engine.profiler,"draw.mesh");
@@ -136,7 +126,7 @@ pub fn update() bool
 
         // const renderStart = frameTimer.read();
         // renderTimer.reset();
-        engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh);
+        engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh, &meshMaterial);
         
     }
 
@@ -144,12 +134,12 @@ pub fn update() bool
 }
 
 
-pub fn applyVertexShader(mvp: *const Mat44f, index: u16, v: Vec4f, material:Material) Vec4f {
+fn applyVertexShader(mvp: *const engine.Mat44f, index: u16, v: engine.Vec4f, material: *engine.render.Material) engine.Vec4f {
     var out = mvp.mul_vec4(v);
     return out;
 }
 
-pub fn projectVertex(p: *const Mat44f, v: Vec4f, viewport:Vec4f, material:Material) Vec4f {
+fn projectVertex(p: *const engine.Mat44f, v: engine.Vec4f, viewport:engine.Vec4f, material: *engine.render.Material) engine.Vec4f {
     var out = p.mul33_vec4(v);
     const half = viewport.scaleDup(0.5);
 
@@ -159,7 +149,7 @@ pub fn projectVertex(p: *const Mat44f, v: Vec4f, viewport:Vec4f, material:Materi
     return out;
 }
 
-pub inline fn uncharted2_tonemap_partial(x:Vec4f) Vec4f
+pub inline fn uncharted2_tonemap_partial(x:engine.Vec4f) engine.Vec4f
 {
     const A = 0.15;
     const B = 0.50;
@@ -189,41 +179,45 @@ pub inline fn uncharted2_tonemap_partial(x:Vec4f) Vec4f
     //return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
 }
 
-pub inline fn uncharted2_filmic(v:Vec4f) Vec4f
+pub inline fn uncharted2_filmic(v:engine.Vec4f) engine.Vec4f
 {
     const exposure_bias = 2.0;
     const curr = uncharted2_tonemap_partial(v.scaleDup(exposure_bias));
 
-    const W = Vec4f.init(11.2,11.2,11.2,0);
-    const white_scale = Vec4f.one().divVecDup(uncharted2_tonemap_partial(W));
+    const W = engine.Vec4f.init(11.2,11.2,11.2,0);
+    const white_scale = engine.Vec4f.one().divVecDup(uncharted2_tonemap_partial(W));
     return curr.mulDup(white_scale);
 }
 
-pub inline fn reinhard(c:Vec4f) Vec4f
+pub inline fn reinhard(c:engine.Vec4f) engine.Vec4f
 {
-    return c.divVecDup(Vec4f.one().addDup(c));
+    return c.divVecDup(engine.Vec4f.one().addDup(c));
     //return v / (1.0f + v);
 }
 
 ///
-pub fn applyPixelShader(
-  mvp: *const Mat44f, 
-  pixel: Vec4f, 
-  color: Vec4f, 
-  normal:Vec4f,
-  uv:Vec4f, 
-  material:Material) Vec4f 
+fn applyPixelShader(
+  mvp: *const engine.Mat44f, 
+  pixel: engine.Vec4f, 
+  color: engine.Vec4f, 
+  normal:engine.Vec4f,
+  uv:engine.Vec4f, 
+  material: *engine.render.Material) engine.Vec4f 
 {
-  var c = color.addDup(
-    Vec4f.init(
-      (std.math.sin(uv.x*uv.y*1000)+1/2),
-      (std.math.cos(uv.y*1000)+1/2),
-      0,1)
-    );
+  // var c = color.addDup(
+  //   engine.Vec4f.init(
+  //     (std.math.sin(uv.x*uv.y*1000)+1/2),
+  //     (std.math.cos(uv.y*1000)+1/2),
+  //     0,1)
+  //   );
 
-    const l = std.math.max(normal.dot3(material.lightDirection)*4, 0.3);
+    var c = material.texture.sample(uv.x, uv.y);
 
-    //return uncharted2_filmic( c.scaleDup(l) );
-    return reinhard(c.scaleDup(l));
+    const l = std.math.max(normal.dot3(material.lightDirection)*material.lightIntensity, 0.2);
+
+    c.scale(l);
+
+    return uncharted2_filmic(c);
+    //kreturn reinhard(c);
     //return c.scaleDup(l);
 }
