@@ -15,8 +15,13 @@ var mesh:engine.Mesh = undefined;
 var projMat:engine.Mat44f = undefined; 
 
 var meshAllocator = std.heap.page_allocator;
+var textureAllocator = std.heap.page_allocator;
 
-const lightDir = Vec4f.init(-0.913913,0.389759,-0.113369, 1).normalized3();
+
+var material = engine.render.Material{
+    .lighDirection = Vec4f.init(-0.913913,0.389759,-0.113369, 1).normalized3(),
+    .lightColorIntensity = Vec4f.one().scaleDup(0.5),
+};
 
 pub fn init() !void {
     projMat = engine.Mat44f.createPerspective(
@@ -30,13 +35,14 @@ pub fn init() !void {
     //mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/bed.obj");
     mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/suzanne.obj");
 
-    var  texture = try tools.TgaTexLoader.importTGAFile(meshAllocator, "../../assets/black_rock.tga");
+    var  texture = try tools.TgaTexLoader.importTGAFile(textureAllocator, "../../assets/black_rock.tga");
 
     viewMat.translate(engine.Vec4f.init(0, 0, -4.0, 0));
 }
 
 pub fn shutdown() !void {
-    
+    textureAllocator.deinit();
+    meshAllocator.deinit();
 }
 
 
@@ -135,4 +141,89 @@ pub fn update() bool
     }
 
     return true;
+}
+
+
+pub fn applyVertexShader(mvp: *const Mat44f, index: u16, v: Vec4f, material:Material) Vec4f {
+    var out = mvp.mul_vec4(v);
+    return out;
+}
+
+pub fn projectVertex(p: *const Mat44f, v: Vec4f, viewport:Vec4f, material:Material) Vec4f {
+    var out = p.mul33_vec4(v);
+    const half = viewport.scaleDup(0.5);
+
+    // center in viewport
+    out.x = half.x * out.x + half.x;
+    out.y = half.y * -out.y + half.y;
+    return out;
+}
+
+pub inline fn uncharted2_tonemap_partial(x:Vec4f) Vec4f
+{
+    const A = 0.15;
+    const B = 0.50;
+    const C = 0.10;
+    const D = 0.20;
+    const E = 0.02;
+    const F = 0.30;
+    
+    const EdivF = E/F;
+    const DmulE = D*E;
+    const DmulF = D*F;
+    const CmulB = C*B;
+
+    const xmulA = x.scaleDup(A);
+    
+    var xNumer = x.mulDup(xmulA.addScalarDup(CmulB));
+    xNumer.addScalar(DmulE);
+
+
+    var xDenom = x.mulDup(xmulA.addScalarDup(B));
+    xDenom.addScalar(DmulF);
+
+    xNumer.divVec(xDenom);
+    xNumer.subScalar(EdivF);
+
+    return xNumer;   
+    //return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
+}
+
+pub inline fn uncharted2_filmic(v:Vec4f) Vec4f
+{
+    const exposure_bias = 2.0;
+    const curr = uncharted2_tonemap_partial(v.scaleDup(exposure_bias));
+
+    const W = Vec4f.init(11.2,11.2,11.2,0);
+    const white_scale = Vec4f.one().divVecDup(uncharted2_tonemap_partial(W));
+    return curr.mulDup(white_scale);
+}
+
+pub inline fn reinhard(c:Vec4f) Vec4f
+{
+    return c.divVecDup(Vec4f.one().addDup(c));
+    //return v / (1.0f + v);
+}
+
+///
+pub fn applyPixelShader(
+  mvp: *const Mat44f, 
+  pixel: Vec4f, 
+  color: Vec4f, 
+  normal:Vec4f,
+  uv:Vec4f, 
+  material:Material) Vec4f 
+{
+  var c = color.addDup(
+    Vec4f.init(
+      (std.math.sin(uv.x*uv.y*1000)+1/2),
+      (std.math.cos(uv.y*1000)+1/2),
+      0,1)
+    );
+
+    const l = std.math.max(normal.dot3(material.lightDirection)*4, 0.3);
+
+    //return uncharted2_filmic( c.scaleDup(l) );
+    return reinhard(c.scaleDup(l));
+    //return c.scaleDup(l);
 }

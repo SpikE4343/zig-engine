@@ -13,7 +13,6 @@ const Mat44f = @import("../core/matrix.zig").Mat44f;
 const Profile = @import("../core/profiler.zig").Profile;
 
 const Mesh = @import("mesh.zig").Mesh;
-const MeshObjLoader = @import("../tools/render/obj_mesh_loader.zig");
 const PixelBuffer = @import("pixel_buffer.zig").PixelBuffer;
 const Material = @import("material.zig").Material;
 
