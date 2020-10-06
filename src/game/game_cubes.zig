@@ -30,6 +30,8 @@ pub fn init() !void {
     //mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/bed.obj");
     mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/suzanne.obj");
 
+    var  texture = try tools.TgaTexLoader.importTGAFile(meshAllocator, "../../assets/black_rock.tga");
+
     viewMat.translate(engine.Vec4f.init(0, 0, -4.0, 0));
 }
 
@@ -38,11 +40,11 @@ pub fn shutdown() !void {
 }
 
 
-fn drawProgress(x:i16, y:i16, value:f32, max:f32) void {
-  const cs = std.math.clamp(value, 0.0, max)/max;
+fn drawProgress(x:i16, y:i16, max_screen_width:f32, value:f32, max_value:f32) void {
+  const cs = std.math.clamp(value, 0.0, max_value)/max_value;
   render.drawLine(
     x,y,
-    @floatToInt(c_int, cs* @intToFloat(f32,renderWidth)/4), 
+    @floatToInt(c_int, cs*max_screen_width), 
     y, 
     render.Color.fromNormal(cs, 1-cs, 0.2, 1)
   );
