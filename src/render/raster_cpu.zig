@@ -15,6 +15,7 @@ const Profile = @import("../core/profiler.zig").Profile;
 const Mesh = @import("mesh.zig").Mesh;
 const MeshObjLoader = @import("../tools/render/obj_mesh_loader.zig");
 const PixelBuffer = @import("pixel_buffer.zig").PixelBuffer;
+const Material = @import("material.zig").Material;
 
 /// RGBA 32 bit color value
 pub const Color = struct {
@@ -166,7 +167,7 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
     depthBuffer = try PixelBuffer(f32).init(renderWidth, renderHeight, allocator);
 }
 
-pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh) void {
+pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, material: *Material) void {
     var sp = profile.?.beginSample("render.mesh.draw");
     defer profile.?.endSample(sp);
 
@@ -182,12 +183,12 @@ pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mes
 
     var t: u16 = 0;
     while (t < ids) {
-        drawTri(m, v, p, &mv, &mvp, t, mesh);
+        drawTri(m, v, p, &mv, &mvp, t, mesh, material);
         t += 3;
     }
 }
 
-pub fn drawPointMesh(mvp: *const Mat44f, mesh: *Mesh) void {
+pub fn drawPointMesh(mvp: *const Mat44f, mesh: *Mesh, material:*Material) void {
     const ids = mesh.vertexBuffer.len;
 
     for (mesh.vertexBuffer) |vertex, i| {
@@ -310,7 +311,15 @@ pub fn drawWorldLine(mvp: *const Mat44f, start: Vec4f, end: Vec4f, color: Vec4f)
 
 
 /// Render triangle to frame buffer
-pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh) void {
+pub fn drawTri(
+  model: *const Mat44f, 
+  view: *const Mat44f, 
+  proj: *const Mat44f, 
+  mv: *const Mat44f, 
+  mvp: *const Mat44f, 
+  offset: u16, 
+  mesh: *Mesh,
+  material: *Material) void {
     var sp = profile.?.beginSample("render.mesh.draw.tri");
     defer profile.?.endSample(sp);
 
@@ -343,9 +352,9 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
     if( bfc > 0.0000000000001)
         return;
 
-    const v0 = projectVertex(proj, applyVertexShader(mv, offset + 0, rv0));
-    const v1 = projectVertex(proj, applyVertexShader(mv, offset + 1, rv1));
-    const v2 = projectVertex(proj, applyVertexShader(mv, offset + 2, rv2));
+    const v0 = material.projectShader(proj, material.vertexShader(mv, offset + 0, rv0));
+    const v1 = material.projectShader(proj, material.vertexShader(mv, offset + 1, rv1));
+    const v2 = material.projectShader(proj, material.vertexShader(mv, offset + 2, rv2));
 
     
     const area = Vec4f.triArea(v0, v1, v2);
@@ -454,7 +463,7 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
             // of the point on the 3D triangle that the pixel overlaps.
             const z = (tri.x * v0.z + tri.y * v1.z + tri.z * v2.z);
 
-            if (depthBuffer.setLessThan(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
+            if (material.depthTest == 1 and depthBuffer.setLessThan(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
                 continue;
 
             p.z = z;
@@ -464,9 +473,7 @@ pub fn drawTri(model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, m
             pixelNormal = Vec4f.triInterp(tri, wn0, wn1, wn2, 1.0, 1.0);
             uv = Vec4f.triInterp(tri, uv0, uv1, uv2, 1.0, 1.0);
 
-            var vc = applyPixelShader(
-              mvp, p, worldPixel, fbc, pixelNormal, uv, 
-              lightDir);
+            var vc = material.pixelShader(mvp, p, fbc, pixelNormal, uv);
 
             if(vc.w <= 0.0)
               continue;

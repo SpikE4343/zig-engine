@@ -16,6 +16,8 @@ var projMat:engine.Mat44f = undefined;
 
 var meshAllocator = std.heap.page_allocator;
 
+const lightDir = Vec4f.init(-0.913913,0.389759,-0.113369, 1).normalized3();
+
 pub fn init() !void {
     projMat = engine.Mat44f.createPerspective(
         50, 
