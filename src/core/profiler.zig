@@ -53,7 +53,7 @@ pub const Profile = struct {
 
   pub fn sampleTime(self:*Profile, id:u32) i64 
   {
-    return self.samples[id].end - self.samples[id].begin;
+    return @intCast(i64, self.samples[id].end - self.samples[id].begin);
   }
 
   // Stop tracking wall clock timing
@@ -74,6 +74,10 @@ pub const Profile = struct {
     //TODO: find out how to correctly handle a timer error here
     var timer = Timer.start() catch |e| return;
     self.frameStartTime = timer.start_time;
+  }
+
+  pub fn hasSamples(self:Profile) bool {
+    return self.nextSample > 1;
   }
 
   pub fn streamPrint(self:*Profile, file:File ) !void {

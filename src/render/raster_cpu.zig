@@ -13,7 +13,10 @@ const Mat44f = @import("../core/matrix.zig").Mat44f;
 const Profile = @import("../core/profiler.zig").Profile;
 
 const Mesh = @import("mesh.zig").Mesh;
-const PixelBuffer = @import("pixel_buffer.zig").PixelBuffer;
+const pixelbuffer = @import("pixel_buffer.zig");
+const PixelBuffer = pixelbuffer.PixelBuffer;
+const PixelRenderer = pixelbuffer.PixelRenderer;
+
 pub const material = @import("material.zig");
 pub const Material = material.Material;
 
@@ -147,9 +150,10 @@ var depthBuffer: PixelBuffer(f32) = undefined;
 
 var profile: ?*Profile = undefined;
 var allocator: *std.mem.Allocator = undefined;
+var colorRenderer:PixelRenderer(Color) = undefined;
 
 pub fn drawLine(xFrom: i32, yFrom: i32, xTo: i32, yTo: i32, color: Color) void {
-  colorBuffer.drawLine(xFrom, yFrom, xTo, yTo, color);
+  colorRenderer.drawLine(xFrom, yFrom, xTo, yTo, color);
 }
 
 pub fn bufferStart() *u8 {
@@ -165,6 +169,7 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
     allocator = alloc;
     colorBuffer = try PixelBuffer(Color).init(renderWidth, renderHeight, allocator);
     depthBuffer = try PixelBuffer(f32).init(renderWidth, renderHeight, allocator);
+    colorRenderer = PixelRenderer(Color).init(&colorBuffer);
 }
 
 pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, shader: *Material) void {
@@ -196,93 +201,7 @@ pub fn drawPointMesh(mvp: *const Mat44f, mesh: *Mesh, shader:*Material) void {
     }
 }
 
-pub fn applyVertexShader(mvp: *const Mat44f, index: u16, v: Vec4f) Vec4f {
-    var out = mvp.mul_vec4(v);
-    return out;
-}
-
-pub fn projectVertex(p: *const Mat44f, v: Vec4f) Vec4f {
-    var out = p.mul33_vec4(v);
-    const hW = @intToFloat(f32, colorBuffer.w) / 2;
-    const hH = @intToFloat(f32, colorBuffer.h) / 2;
-
-    // center in viewport
-    out.x = hW * out.x + hW;
-    out.y = hH * -out.y + hH;
-    return out;
-}
-
-pub inline fn uncharted2_tonemap_partial(x:Vec4f) Vec4f
-{
-    const A = 0.15;
-    const B = 0.50;
-    const C = 0.10;
-    const D = 0.20;
-    const E = 0.02;
-    const F = 0.30;
-    
-    const EdivF = E/F;
-    const DmulE = D*E;
-    const DmulF = D*F;
-    const CmulB = C*B;
-
-    const xmulA = x.scaleDup(A);
-    
-    var xNumer = x.mulDup(xmulA.addScalarDup(CmulB));
-    xNumer.addScalar(DmulE);
-
-
-    var xDenom = x.mulDup(xmulA.addScalarDup(B));
-    xDenom.addScalar(DmulF);
-
-    xNumer.divVec(xDenom);
-    xNumer.subScalar(EdivF);
-
-    return xNumer;   
-    //return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
-}
-
-pub inline fn uncharted2_filmic(v:Vec4f) Vec4f
-{
-    const exposure_bias = 2.0;
-    const curr = uncharted2_tonemap_partial(v.scaleDup(exposure_bias));
-
-    const W = Vec4f.init(11.2,11.2,11.2,0);
-    const white_scale = Vec4f.one().divVecDup(uncharted2_tonemap_partial(W));
-    return curr.mulDup(white_scale);
-}
-
-pub inline fn reinhard(c:Vec4f) Vec4f
-{
-    return c.divVecDup(Vec4f.one().addDup(c));
-    //return v / (1.0f + v);
-}
-
-///
-pub fn applyPixelShader(
-  mvp: *const Mat44f, 
-  pixel: Vec4f, 
-  worldPixel: Vec4f, 
-  color: Vec4f, 
-  normal:Vec4f,
-  uv:Vec4f, 
-  lightDir:Vec4f) Vec4f 
-{
-  var c = color.addDup(
-    Vec4f.init(
-      (std.math.sin(uv.x*uv.y*1000)+1/2),
-      (std.math.cos(uv.y*1000)+1/2),
-      0,1)
-    );
-
-    const l = std.math.max(normal.dot3(lightDir)*4, 0.3);
-
-    //return uncharted2_filmic( c.scaleDup(l) );
-    return reinhard(c.scaleDup(l));
-    //return c.scaleDup(l);
-}
-
-///
+//
 pub fn drawPoint(mvp: *const Mat44f, point: Vec4f, color: Vec4f) void {
     const px = applyVertexShader(mvp, 0, point);
     const pc = color;
@@ -507,6 +426,17 @@ pub fn drawTri(
     // drawWorldLine(mvp, rv1, rv1.addDup(n1), Vec4f.init(0,1,0,1));
 
     // drawWorldLine(mvp, rv2, rv2.addDup(n2), Vec4f.init(0,0,1,1));
+}
+
+pub fn drawProgress(x:i16, y:i16, max_width:f32, value:f32, max_value:f32) void {
+  const cs = std.math.clamp(value, 0.0, max_value)/max_value;
+  const cs2 = cs*cs;
+  drawLine(
+    x,y,
+    @floatToInt(c_int, cs*max_width), 
+    y, 
+    Color.fromNormal(cs, (1-cs), 0.2, 1)
+  );
 }
 
 pub fn writePixel(x: i32, y: i32, z: f32, c: Color) void {

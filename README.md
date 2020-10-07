@@ -11,6 +11,8 @@ Write a software rendering engine and explore some zig at the same time.
   
 ### Debug
   - [ ] Server, host and support commands and debug data streaming
+  - [ ] Allocator based game data partitioning 
+    - [ ] Allow for pages of data to be streamed, needs pointer normalization
 
 ### Profiler
   - [x] Simple wallclock based profiler intended to be used for inspecting large sections like:
@@ -36,7 +38,8 @@ Write a software rendering engine and explore some zig at the same time.
 
 
 ### Core
-  - [ ] Move main function to game files, use `engine` as import 
+  - [ ] Move main function to game files, use `engine` as import
+  - [ ] Perlin Noise 
   - [x] Matrix [Mat44f](src/core/matrix.zig)
   - [x] Vector [Vec4f](src/core/vector.zig)
 
@@ -56,6 +59,7 @@ Write a software rendering engine and explore some zig at the same time.
   - [x] Texture Mapping
 
 #### Crazy/Fun? Ideas
+  - [ ] Voxel based world
   - [ ] Explore raytracing
   - [ ] Height Map Terrain Rendering
   - [ ] Parallel Rendering using Job/Task system
