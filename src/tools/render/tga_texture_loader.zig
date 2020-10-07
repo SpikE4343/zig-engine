@@ -39,7 +39,11 @@ const TGA_HEADER = packed struct
   Descriptor:u8,
 
   pub fn bufferSize(self:@This()) usize {
-    return (self.ColorDepth/8) * self.Width * self.Height;
+    return self.pixelWidth() * @intCast(usize, self.Width) * @intCast(usize, self.Height);
+  }
+
+  pub fn pixelWidth(self:@This()) u8 {
+    return self.ColorDepth >> 3;
   }
 } ;
 
@@ -75,5 +79,5 @@ pub fn importTGAFile(allocator: *Allocator, file_path: []const u8) !Texture
   const read = try in.readAll(data);
 
 
-  return Texture.init(format, header.Width, header.Height, data);
+  return Texture.init(format, header.Width, header.Height, header.pixelWidth(), data);
   }

@@ -461,7 +461,7 @@ pub fn drawTri(
             // if we use perspective correct interpolation we need to
             // multiply the result of this interpolation by z, the depth
             // of the point on the 3D triangle that the pixel overlaps.
-            const z = (tri.x * v0.z + tri.y * v1.z + tri.z * v2.z);
+            const z =(tri.x * v0.z + tri.y * v1.z + tri.z * v2.z);
 
             if (shader.depthTest == 1 and depthBuffer.setLessThan(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
                 continue;

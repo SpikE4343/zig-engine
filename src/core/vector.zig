@@ -1,5 +1,6 @@
 const std = @import("std");
 const math = std.math;
+const interp = @import("interp.zig");
 
 pub const Vec4f = struct {
   x: f32,
@@ -309,6 +310,27 @@ pub const Vec4f = struct {
       (tri.x * v0.y + tri.y * v1.y + tri.z * v2.y) / depth,
       (tri.x * v0.z + tri.y * v1.z + tri.z * v2.z) / depth,
       w);
+  }
+
+  pub fn lerpDup(from:Vec4f, to:Vec4f, d:f32) Vec4f {
+    return Vec4f.init(
+      interp.lerp(f32, from.x, to.x, d),
+      interp.lerp(f32, from.y, to.y, d),
+      interp.lerp(f32, from.z, to.z, d),
+      interp.lerp(f32, from.w, to.w, d)
+    );
+  }
+
+  pub fn blerpDup(fromx:Vec4f, tox:Vec4f, fromy:Vec4f, toy:Vec4f, dx:f32, dy:f32) Vec4f {
+    return lerpDup( lerpDup(fromx, tox, dx), lerpDup(fromy, toy, dx), dy);
+  }
+
+
+  pub fn lerp(self:*Vec4f, from:Vec4f, to:Vec4f, d:f32) void {
+      self.x = interp.lerp(from.x, to.x, d);
+      self.y = interp.lerp(from.y, to.y, d);
+      self.z = interp.lerp(from.z, to.z, d);
+      self.w = interp.lerp(from.w, to.w, d);
   }
 };
 

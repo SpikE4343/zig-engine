@@ -20,42 +20,57 @@ Write a software rendering engine and explore some zig at the same time.
     * Input
     * System
 
-  - [ ] Add support for allocating sample data _(aka. explore using allocators)_
-    - [ ] Threaded write?
-    - [ ] Add Per Frame Profile data streaming 
+    - [ ] Double buffer profiler to display last frame while rendering/updating next frame
+    - [ ] Threaded write to disk?
+
   
 ### Systems
   - [ ] Threaded Job/Tasks  
 
 ### I/O
   - [ ] Mesh Loading
+    - [x] Basic mesh only, text .OBJ import 
+    - [ ] Material import from .MTL files
   - [ ] Image loading
+    - [x] .TGA uncompressed RGB8,Grayscale8
+
 
 ### Core
+  - [ ] Move main function to game files, use `engine` as import 
   - [x] Matrix [Mat44f](src/core/matrix.zig)
   - [x] Vector [Vec4f](src/core/vector.zig)
 
-### Runtime Libraries
+
+### Rendering
+  - [ ] Ui Render texture different from world
+  - [ ] Text Rendering
+  - [ ] Profiler Rendering
+  
+  
+#### Done
+  - [x] Basic triangle and mesh rasterizer
+  - [x] Depth Buffer
+  - [x] Backface culling
+  - [x] Wrap render buffer
+  - [x] Shaders
+  - [x] Texture Mapping
+
+#### Crazy/Fun? Ideas
+  - [ ] Explore raytracing
+  - [ ] Height Map Terrain Rendering
+  - [ ] Parallel Rendering using Job/Task system
+
+
+### Runtime Libraries?
   - [ ] Game Logic
   - [ ] Core
   - [ ] System
   - [ ] Profiler/Debug
 
-### Rendering
-  - [x] Basic triangle and mesh rasterizer
-  - [ ] Text Rendering
-  - [ ] Ui Render texture different from world
-  - [ ] Depth Buffer
-  - [x] Backface culling
-  - [ ] Wrap render buffer
-  - [ ] Shaders
-  - [ ] Texture Mapping
-  - [ ] Explore raytracing
-  - [ ] Height Map Terrain Rendering
-  - [ ] Parallel Rendering using Job/Task system
 
 ### Unit Testing
   - [ ] [Mat44f](src/core/matrix.zig)
   - [ ] [Vec4f](src/core/vector.zig)
+
 
   

@@ -33,13 +33,14 @@ pub fn init() !void {
     //mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/cube.obj");
     //mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/bed.obj");
     mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/suzanne.obj");
-    var  texture = try tools.TgaTexLoader.importTGAFile(textureAllocator, "../../assets/black_rock.tga");
+    // var  texture = try tools.TgaTexLoader.importTGAFile(textureAllocator, "../../assets/black_rock.tga");
+    var  texture = try tools.TgaTexLoader.importTGAFile(textureAllocator, "../../assets/grass.tga");
 
     meshMaterial = engine.render.Material {
       .depthTest = 1,
       .lightDirection = engine.Vec4f.init(-0.913913,0.389759,-0.113369, 1).normalized3(),
       .lightColor = engine.Vec4f.one(),
-      .lightIntensity = 20,
+      .lightIntensity = 1,
       .vertexShader = applyVertexShader,
       .projectionShader = projectVertex,
       .pixelShader = applyPixelShader,
@@ -71,6 +72,7 @@ var mousePos = engine.Vec4f.zero();
 var cameraPos = engine.Vec4f.zero();
 var cameraRot = engine.Mat44f.identity();
 
+var exposure_bias:f32 = 2.0;
 
 
 pub fn update() bool 
@@ -91,6 +93,8 @@ pub fn update() bool
 
     const rot = (input.keyStateFloat(input.KeyCode.Q) - input.keyStateFloat(input.KeyCode.E)) * moveSpeed;
 
+    
+
 
 
     const rightButton = @intToFloat(f32, input.getMouseRight());
@@ -101,8 +105,10 @@ pub fn update() bool
     currentMouse.z = yaw;
     currentMouse.w = pitch;
 
+    const exposure = (input.keyStateFloat(input.KeyCode.U) - input.keyStateFloat(input.KeyCode.J)) * moveSpeed;
     const bright = input.keyStateFloat(input.KeyCode.I) - input.keyStateFloat(input.KeyCode.K) * 0.1;
     meshMaterial.lightIntensity = std.math.max(meshMaterial.lightIntensity + bright, 0.0 );
+    exposure_bias = std.math.max(exposure_bias + exposure, 0.0 );
 
     mousePos = currentMouse;
     var trans = engine.Mat44f.identity();
@@ -181,7 +187,7 @@ pub inline fn uncharted2_tonemap_partial(x:engine.Vec4f) engine.Vec4f
 
 pub inline fn uncharted2_filmic(v:engine.Vec4f) engine.Vec4f
 {
-    const exposure_bias = 2.0;
+    //const exposure_bias = 2.0;
     const curr = uncharted2_tonemap_partial(v.scaleDup(exposure_bias));
 
     const W = engine.Vec4f.init(11.2,11.2,11.2,0);
@@ -212,8 +218,9 @@ fn applyPixelShader(
   //   );
 
     var c = material.texture.sample(uv.x, uv.y);
+    //var c = material.texture.sampleBilinear(uv.x, uv.y);
 
-    const l = std.math.max(normal.dot3(material.lightDirection)*material.lightIntensity, 0.2);
+    const l = std.math.max(normal.dot3(material.lightDirection)*material.lightIntensity, 0.4);
 
     c.scale(l);
 

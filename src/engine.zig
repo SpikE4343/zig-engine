@@ -22,38 +22,39 @@ pub var stdout = std.io.getStdOut();
 
 var bufferAllocator = std.heap.page_allocator;
 
+// pub const systemConfig = sys.Config{
+//   .windowWidth = 1024,
+//   .windowHeight = 768,
+//   .renderWidth = 320,
+//   .renderHeight = 240,
+//   .maxFps = 60,
+//   .fullscreen = false,
+// };
+
+// pub const systemConfig = sys.Config{
+//   .windowWidth = 1920,
+//   .windowHeight = 1080,
+//   .renderWidth = 1920,
+//   .renderHeight = 1080,
+//   .maxFps = 60,
+//   .fullscreen = true,
+// };
+
+
 pub const systemConfig = sys.Config{
-  .windowWidth = 1024,
-  .windowHeight = 768,
-  .renderWidth = 320,
+  .windowWidth = 1920,
+  .windowHeight = 1080,
+  .renderWidth = 426,
   .renderHeight = 240,
   .maxFps = 60,
-  .fullscreen = false,
+  .fullscreen = true,
 };
-
-// pub const systemConfig = sys.Config{
-//   .windowWidth = 1920,
-//   .windowHeight = 1080,
-//   .renderWidth = 426,
-//   .renderHeight = 240,
-//   .maxFps = 60,
-//   .fullscreen = true,
-// };
-
-
-// pub const systemConfig = sys.Config{
-//   .windowWidth = 1920,
-//   .windowHeight = 1080,
-//   .renderWidth = 426,
-//   .renderHeight = 240,
-//   .maxFps = 60,
-//   .fullscreen = true,
-// };
 
 pub fn main() !void {
 
     var profiler = Profile.init();
     profiler.nextFrame();
+
 
     try sys.init(systemConfig);
     defer sys.shutdown();
