@@ -52,10 +52,9 @@ pub const systemConfig = sys.Config{
 
 var profileId:u1 = 0;
 
-var profiles = [2]Profile {
-  Profile.init(),
-  Profile.init()
-};
+var profiles:[2]Profile = undefined;
+
+  
 
 pub fn swapProfile() *Profile {
   profileId = ~profileId;
@@ -71,6 +70,11 @@ pub fn nextProfile() *Profile {
 }
 
 pub fn main() !void {
+
+    profiles = [2]Profile {
+      try Profile.init(bufferAllocator),
+      try Profile.init(bufferAllocator)
+    };
 
     var profiler = currentProfile();
     profiler.nextFrame();
@@ -92,6 +96,11 @@ pub fn main() !void {
 
     _= try game.init();
 
+    var mainSampler:Sampler = undefined;
+    var systemSampler:Sampler = undefined;
+    var gameSampler:Sampler = undefined;
+    var renderSampler:Sampler = undefined;
+
     while (!quit) 
     {
         {
@@ -110,7 +119,7 @@ pub fn main() !void {
                 var c = Sampler.begin(profiler, "game.update");
                 defer c.end();
                 if(!game.update())
-                  return;
+                  break;
             }
             render.endFrame();
 
@@ -119,7 +128,10 @@ pub fn main() !void {
                 defer srt.end();
 
                 if(lastProfile.hasSamples())
+                {
                   render.drawProgress(2, 2, 100, @intToFloat(f32, lastProfile.sampleTime(1)), targetFrameTimeNs );
+                  render.drawProgress(2, 5, 100, @intToFloat(f32, lastProfile.sampleTime(2)), targetFrameTimeNs );
+                }
             }
 
 
@@ -144,6 +156,8 @@ pub fn main() !void {
         profiler = swapProfile();
         profiler.nextFrame();
     }
+
+    try lastProfile.jsonFileWrite(bufferAllocator, "prof.json");
 
     //bufferAllocator.deinit();
 }

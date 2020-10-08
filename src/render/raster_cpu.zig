@@ -239,8 +239,7 @@ pub fn drawTri(
   offset: u16, 
   mesh: *Mesh,
   shader: *Material) void {
-    var sp = profile.?.beginSample("render.mesh.draw.tri");
-    defer profile.?.endSample(sp);
+    
 
     var vp = view.*;
     vp.mul(proj.*);
@@ -290,6 +289,8 @@ pub fn drawTri(
     if( v0.z <= 0.1 or v1.z <= 0.1 or v2.z <= 0.1)
         return;
 
+    var sp = profile.?.beginSample("render.mesh.draw.tri");
+    defer profile.?.endSample(sp);
 
     const wv0 = model.mul_vec4(rv0);
     const wv1 = model.mul_vec4(rv1);
@@ -364,6 +365,9 @@ pub fn drawTri(
 
         while (x <= bounds.max.x) 
         {
+            var pprof = profile.?.beginSample("render.mesh.draw.tri.pixel");
+            defer profile.?.endSample(pprof);
+
             defer x += 1;
 
             p.x = x; 
@@ -386,6 +390,9 @@ pub fn drawTri(
                 continue;
 
             p.z = z;
+
+            var pdprof = profile.?.beginSample("render.mesh.draw.tri.pixel.draw");
+            defer profile.?.endSample(pdprof);
 
             // interpolate vertex colors across all pixels
             fbc = Vec4f.triInterp(tri, c0, c1, c2, 1.0, 1.0);
@@ -445,6 +452,9 @@ pub fn writePixel(x: i32, y: i32, z: f32, c: Color) void {
 }
 
 pub fn beginFrame() *u8 {
+    var pprof = profile.?.beginSample("render.beginFrame");
+    defer profile.?.endSample(pprof);
+
     colorBuffer.clear(Color.black());
     depthBuffer.clear(std.math.inf(f32));
     return &colorBuffer.bufferStart().color[0];
