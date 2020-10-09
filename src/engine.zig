@@ -104,11 +104,11 @@ pub fn main() !void {
     while (!quit) 
     {
         {
-            var el = Sampler.begin(profiler,"engine.main");
+            var el = Sampler.initAndBegin(profiler,"engine.main");
             defer el.end();
             
             {
-                var supdate = Sampler.begin(profiler,"system.update");
+                var supdate = Sampler.initAndBegin(profiler,"system.update");
                 defer supdate.end();
 
                 quit = !sys.beginUpdate();
@@ -116,7 +116,7 @@ pub fn main() !void {
 
             const b = render.beginFrame();
             {
-                var c = Sampler.begin(profiler, "game.update");
+                var c = Sampler.initAndBegin(profiler, "game.update");
                 defer c.end();
                 if(!game.update())
                   break;
@@ -124,19 +124,19 @@ pub fn main() !void {
             render.endFrame();
 
             {
-                var srt = Sampler.begin(profiler, "engine.render.profile");
+                var srt = Sampler.initAndBegin(profiler, "engine.render.profile");
                 defer srt.end();
 
                 if(lastProfile.hasSamples())
                 {
                   render.drawProgress(2, 2, 100, @intToFloat(f32, lastProfile.sampleTime(1)), targetFrameTimeNs );
-                  render.drawProgress(2, 5, 100, @intToFloat(f32, lastProfile.sampleTime(2)), targetFrameTimeNs );
+                  //render.drawProgress(2, 5, 100, @intToFloat(f32, lastProfile.sampleTime(2)), targetFrameTimeNs );
                 }
             }
 
 
             {
-                var srt = Sampler.begin(profiler, "system.render.present");
+                var srt = Sampler.initAndBegin(profiler, "system.render.present");
                 defer srt.end();
 
                 sys.updateRenderTexture(b, bufferLineSize);
@@ -144,7 +144,7 @@ pub fn main() !void {
             }
 
             {
-                var sup = Sampler.begin(profiler, "system.wait");
+                var sup = Sampler.initAndBegin(profiler, "system.wait");
                 defer sup.end();
 
                 _= sys.endUpdate();

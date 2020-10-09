@@ -47,6 +47,16 @@ pub fn init() !void {
       .texture = texture,
     };
     
+    var  fontTex = try tools.TgaTexLoader.importTGAFile(
+      textureAllocator, "../../assets/mbf_small_7x7.tga");
+
+    font = engine.render.Font{
+      .glyphWidth = 7,
+      .glyphHeight = 7,
+      .texture = fontTex,
+    };
+
+
     viewMat.translate(engine.Vec4f.init(0, 0, -4.0, 0));
 }
 
@@ -65,6 +75,7 @@ var cameraPos = engine.Vec4f.zero();
 var cameraRot = engine.Mat44f.identity();
 
 var exposure_bias:f32 = 2.0;
+var font:engine.render.Font = undefined;
 
 
 pub fn update() bool 
@@ -125,7 +136,7 @@ pub fn update() bool
         // const renderStart = frameTimer.read();
         // renderTimer.reset();
         engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh, &meshMaterial);
-        
+        engine.render.drawString(&font, "Hello World!", 10, 10, engine.Vec4f.one() );
     }
 
     return true;

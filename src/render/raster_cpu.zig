@@ -11,6 +11,7 @@ const Vec4f = @import("../core/vector.zig").Vec4f;
 const Mat44f = @import("../core/matrix.zig").Mat44f;
 
 const Profile = @import("../core/profiler.zig").Profile;
+pub const Font = @import("font.zig").Font;
 
 const Mesh = @import("mesh.zig").Mesh;
 const pixelbuffer = @import("pixel_buffer.zig");
@@ -199,6 +200,36 @@ pub fn drawPointMesh(mvp: *const Mat44f, mesh: *Mesh, shader:*Material) void {
     for (mesh.vertexBuffer) |vertex, i| {
         drawPoint(mvp, vertex, mesh.colorBuffer[i]);
     }
+}
+
+pub fn drawString(font:*Font, str:[]const u8, x:i32, y:i32, color: Vec4f) void {
+  const colorValue = Color.init(
+      @floatToInt(u8, color.x * 255), 
+      @floatToInt(u8, color.y * 255), 
+      @floatToInt(u8, color.z * 255), 
+      @floatToInt(u8, color.w * 255)
+    );
+
+  for(str) | c, i| {
+    const cx = font.characterX(c);
+    const cy = font.characterY(c);
+
+    var coy:i32 = 0;
+    while(coy < font.glyphHeight){
+      defer coy += 1;
+
+      var cox:i32 = 0;
+      while(cox < font.glyphWidth-1){
+        defer cox += 1;
+
+        var samp = font.characterColor(cx, cy, cox, coy);
+        if(samp.x <= 0.001)
+          continue;
+
+        writePixelNormal((x+(font.glyphWidth-1)*@intCast(i32,i)) + cox, y + coy, 1.0, samp);
+      }
+    }
+  }
 }
 
 //
@@ -446,6 +477,11 @@ pub fn drawProgress(x:i16, y:i16, max_width:f32, value:f32, max_value:f32) void 
   );
 }
 
+pub fn writePixelNormal(x: i32, y: i32, z: f32, c: Vec4f) void {
+    colorBuffer.write(x, y, Color.fromNormal(c.x, c.y, c.z, c.w));
+    depthBuffer.write(x, y, z);
+}
+
 pub fn writePixel(x: i32, y: i32, z: f32, c: Color) void {
     colorBuffer.write(x, y, c);
     depthBuffer.write(x, y, z);
@@ -455,7 +491,7 @@ pub fn beginFrame() *u8 {
     var pprof = profile.?.beginSample("render.beginFrame");
     defer profile.?.endSample(pprof);
 
-    colorBuffer.clear(Color.black());
+    colorBuffer.clear(Color.init(50,50,120,255));
     depthBuffer.clear(std.math.inf(f32));
     return &colorBuffer.bufferStart().color[0];
 }

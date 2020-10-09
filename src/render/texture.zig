@@ -67,8 +67,6 @@ pub const Texture = struct {
     );
   }
 
-  
-
   pub fn sampleR(self:Texture, index:usize) f32 {
     return switch(self.format){
       .GRAY8, .RGB8, .RGBA8 => @intToFloat(f32, self.colors[index])/255.0,

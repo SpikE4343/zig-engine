@@ -133,8 +133,6 @@ pub const Profile = struct {
 
       if( i == 0 or sample.begin == 0)
         continue;
-
-      
       
       var s = sample.depth;
       while(s > 0) 
@@ -174,7 +172,7 @@ pub const Profile = struct {
       try stream.print("{{ \"name\": \"{}\", \"cat\":\"{}\",\"ph\":\"{}\",\"pid\": {},\"tid\": {},\"ts\": {}, \"dur\":{} }}", 
         .{sample.tag, "PERF", "X", 1, 1, begin, end-begin});
 
-      std.debug.warn("{}, {}\n", .{i, self.nextSample});
+      //std.debug.warn("{}, {}\n", .{i, self.nextSample});
       if( i < self.nextSample-1)
         try stream.print(",\n", .{});      
     }
@@ -194,8 +192,6 @@ pub const Profile = struct {
     defer file.close();
 
     try self.jsonPrint(file);
-
-    
   }
 
   pub fn dumpStreamText(self:*Profile, file:File ) !void {
@@ -237,7 +233,7 @@ pub const Sampler = struct {
   pub fn initAndBegin(profiler: *Profile, tag:[]const u8) Sampler {
     return Sampler {
       .owner = profiler,
-      .id = self.profiler.beginSample(tag),
+      .id = profiler.beginSample(tag),
     };
   }
 
@@ -245,7 +241,6 @@ pub const Sampler = struct {
     self.id = self.profiler.beginSample(tag);
   }
   
-
   pub fn end(self:*Sampler) void {
     self.owner.endSample(self.id);
   }
