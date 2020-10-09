@@ -13,6 +13,23 @@
       "problemMatcher": [
         "$gcc"
       ]
-    }
+    },
+    {
+      "label": "zig test",
+      "type": "process",
+      "command": "zig",
+      "args": [
+          "test",
+          "${file}"
+      ],
+      "group": {
+          "kind": "test",
+          "isDefault": true
+      },
+      "presentation":{
+          "showReuseMessage": false,
+          "clear": true
+      }
+  }
   ]
 }
