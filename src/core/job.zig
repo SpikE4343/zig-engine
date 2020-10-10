@@ -161,7 +161,8 @@ pub const WorkerPool = struct {
     var workers = try std.ArrayList(JobWorker).initCapacity(allocator, workerCount);
 
     var w = workerCount;
-    while(w > 0){
+    while(w > 0) {
+      defer w -= 1;
       try workers.append(try JobWorker.init(w, queue));
     }
 
