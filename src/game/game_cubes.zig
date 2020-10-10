@@ -220,8 +220,8 @@ fn applyPixelShader(
   //     0,1)
   //   );
 
-    var c = material.texture.sample(uv.x, uv.y);
-    //var c = material.texture.sampleBilinear(uv.x, uv.y);
+    //var c = material.texture.sample(uv.x, uv.y);
+    var c = material.texture.sampleBilinear(uv.x, uv.y);
 
     const l = std.math.max(normal.dot3(material.lightDirection)*material.lightIntensity, 0.4);
 

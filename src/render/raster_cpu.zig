@@ -18,6 +18,11 @@ const pixelbuffer = @import("pixel_buffer.zig");
 const PixelBuffer = pixelbuffer.PixelBuffer;
 const PixelRenderer = pixelbuffer.PixelRenderer;
 
+const jobs = @import("../core/job.zig");
+const Job = jobs.Job;
+const JobWorker = jobs.JobWorker;
+const JobQueue = jobs.InPlaceQueue(Job);
+
 pub const material = @import("material.zig");
 pub const Material = material.Material;
 
@@ -153,6 +158,71 @@ var profile: ?*Profile = undefined;
 var allocator: *std.mem.Allocator = undefined;
 var colorRenderer:PixelRenderer(Color) = undefined;
 
+pub const TriRenderJob = struct {
+  job: Job,
+  id: u8,
+  model: *const Mat44f, 
+  view: *const Mat44f, 
+  proj: *const Mat44f, 
+  mv: *const Mat44f, 
+  mvp: *const Mat44f, 
+  offset: u16, 
+  mesh: *Mesh,
+  shader: *Material,
+  complete:bool,
+  
+
+  pub fn init(
+    ident:u8, 
+    model: *const Mat44f, 
+    view: *const Mat44f, 
+    proj: *const Mat44f, 
+    mv: *const Mat44f, 
+    mvp: *const Mat44f, 
+    offset: u16, 
+    mesh: *Mesh,
+    shader: *Material) TriRenderJob {
+    
+    return TriRenderJob {
+      .job = Job {  
+        // .priority = 0,
+        // .name = "testjob",
+        .executeFn = execute,
+        .abortFn = abort,
+        },
+
+      .id = ident,
+      .model = model,
+      .view = view,
+      .proj = proj,
+      .mv = mv,
+      .mvp = mvp,
+      .offset = offset,
+      .mesh = mesh,
+      .shader = shader,
+      .complete = false,
+     };
+  }
+
+  fn execute(job:*Job) !void {
+    const self = @fieldParentPtr(TriRenderJob, "job", job);
+    //std.debug.warn("\t job: {} execution!\n", .{self.id});
+    drawTri(self);
+    self.complete = true;
+  }
+
+  fn abort(job:*Job) !void {
+    const self = @fieldParentPtr(TriRenderJob, "job", job);
+  }
+};
+
+
+
+var triData:std.ArrayList(TriRenderJob) = undefined;
+var renderQueue = JobQueue.init();
+var renderWorkers:[8]JobWorker = undefined;
+
+
 pub fn drawLine(xFrom: i32, yFrom: i32, xTo: i32, yTo: i32, color: Color) void {
   colorRenderer.drawLine(xFrom, yFrom, xTo, yTo, color);
 }
@@ -171,6 +241,23 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
     colorBuffer = try PixelBuffer(Color).init(renderWidth, renderHeight, allocator);
     depthBuffer = try PixelBuffer(f32).init(renderWidth, renderHeight, allocator);
     colorRenderer = PixelRenderer(Color).init(&colorBuffer);
+    triData = try std.ArrayList(TriRenderJob).initCapacity(alloc, 1024);
+    try triData.resize(1024);
+
+    renderWorkers = [_]JobWorker{
+      try JobWorker.init(0, &renderQueue),
+      try JobWorker.init(1, &renderQueue),
+      try JobWorker.init(2, &renderQueue),
+      try JobWorker.init(3, &renderQueue),
+      try JobWorker.init(4, &renderQueue),
+      try JobWorker.init(5, &renderQueue),
+      try JobWorker.init(6, &renderQueue),
+      try JobWorker.init(7, &renderQueue),
+    };
+
+    for(renderWorkers) |*worker| {
+      try worker.start();
+    }
 }
 
 pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, shader: *Material) void {
@@ -187,9 +274,35 @@ pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mes
     const ids = mesh.indexBuffer.len;
     const numTris = ids / 3;
 
+
     var t: u16 = 0;
     while (t < ids) {
-        drawTri(m, v, p, &mv, &mvp, t, mesh, shader);
+        triData.items[t/3] = TriRenderJob.init(@truncate(u8, t/3),
+            m,
+            v,
+            p,
+            &mv,
+            &mvp,
+            t,
+            mesh,
+            shader);
+        
+        var data = &triData.items[t/3];
+        data.complete = false;
+        renderQueue.push(&data.job);
+        //drawTri(data);
+        t += 3;
+    }
+
+    t = 0;
+    while (t < ids) {
+        var wait:u64 = 0;
+        var wt = profile.?.beginSample("render.mesh.wait.tri");
+        defer profile.?.endSample(wt);
+        var data = &triData.items[t/3];
+        while(!data.complete)
+          wait += 1;
+
         t += 3;
     }
 }
@@ -261,32 +374,22 @@ pub fn drawWorldLine(mvp: *const Mat44f, start: Vec4f, end: Vec4f, color: Vec4f)
 
 
 /// Render triangle to frame buffer
-pub fn drawTri(
-  model: *const Mat44f, 
-  view: *const Mat44f, 
-  proj: *const Mat44f, 
-  mv: *const Mat44f, 
-  mvp: *const Mat44f, 
-  offset: u16, 
-  mesh: *Mesh,
-  shader: *Material) void {
-    
+pub fn drawTri(d:*TriRenderJob) void {
+    var vp = d.view.*;
+    vp.mul(d.proj.*);
 
-    var vp = view.*;
-    vp.mul(proj.*);
+    const vi0 = d.mesh.indexBuffer[d.offset + 0];
+    const vi1 = d.mesh.indexBuffer[d.offset + 1];
+    const vi2 = d.mesh.indexBuffer[d.offset + 2];
 
-    const vi0 = mesh.indexBuffer[offset + 0];
-    const vi1 = mesh.indexBuffer[offset + 1];
-    const vi2 = mesh.indexBuffer[offset + 2];
-
-    const rv0 = mesh.vertexBuffer[vi0];
-    const rv1 = mesh.vertexBuffer[vi1];
-    const rv2 = mesh.vertexBuffer[vi2];
+    const rv0 = d.mesh.vertexBuffer[vi0];
+    const rv1 = d.mesh.vertexBuffer[vi1];
+    const rv2 = d.mesh.vertexBuffer[vi2];
 
     // cull back facing triangles
-    const mv0 = mv.mul33_vec4(rv0);
-    const mv1 = mv.mul33_vec4(rv1);
-    const mv2 = mv.mul33_vec4(rv2);
+    const mv0 = d.mv.mul33_vec4(rv0);
+    const mv1 = d.mv.mul33_vec4(rv1);
+    const mv2 = d.mv.mul33_vec4(rv2);
     
     var e0 = mv1;
     var e1 = mv2;
@@ -306,9 +409,9 @@ pub fn drawTri(
         @intToFloat(f32, colorBuffer.h), 
         0, 0);
 
-    const v0 = shader.projectionShader(proj, shader.vertexShader(mv, offset + 0, rv0, shader), viewport, shader);
-    const v1 = shader.projectionShader(proj, shader.vertexShader(mv, offset + 1, rv1, shader), viewport, shader);
-    const v2 = shader.projectionShader(proj, shader.vertexShader(mv, offset + 2, rv2, shader), viewport, shader);
+    const v0 = d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 0, rv0, d.shader), viewport, d.shader);
+    const v1 = d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 1, rv1, d.shader), viewport, d.shader);
+    const v2 = d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 2, rv2, d.shader), viewport, d.shader);
 
     
     const area = Vec4f.triArea(v0, v1, v2);
@@ -320,12 +423,12 @@ pub fn drawTri(
     if( v0.z <= 0.1 or v1.z <= 0.1 or v2.z <= 0.1)
         return;
 
-    var sp = profile.?.beginSample("render.mesh.draw.tri");
-    defer profile.?.endSample(sp);
+    // var sp = profile.?.beginSample("render.mesh.draw.tri");
+    // defer profile.?.endSample(sp);
 
-    const wv0 = model.mul_vec4(rv0);
-    const wv1 = model.mul_vec4(rv1);
-    const wv2 = model.mul_vec4(rv2);
+    const wv0 = d.model.mul_vec4(rv0);
+    const wv1 = d.model.mul_vec4(rv1);
+    const wv2 = d.model.mul_vec4(rv2);
 
     const c0 = Vec4f.zero();//rv0.scaleDup(0.5);//Vec4f.init(rv0.x,0,0,1); // mesh.vertexNormalBuffer[vi0];
     const c1 = Vec4f.zero();//rv1.scaleDup(0.5);//Vec4f.init(0,rv0.y,0,1); // mesh.vertexNormalBuffer[vi1];//mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
@@ -339,28 +442,28 @@ pub fn drawTri(
 
     const worldNormalTri = we0.cross3(we1).normalized3();
 
-    const n0 = mesh.vertexNormalBuffer[mesh.indexNormalBuffer[offset + 0]];
-    const n1 = mesh.vertexNormalBuffer[mesh.indexNormalBuffer[offset + 1]];
-    const n2 = mesh.vertexNormalBuffer[mesh.indexNormalBuffer[offset + 2]];
+    const n0 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 0]];
+    const n1 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 1]];
+    const n2 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 2]];
 
     const uv0 = Vec4f.init(
-      mesh.textureCoordBuffer[mesh.indexUVBuffer[(offset+0)]*2 + 0],
-      mesh.textureCoordBuffer[mesh.indexUVBuffer[(offset+0)]*2 + 1],
+      d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset+0)]*2 + 0],
+      d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset+0)]*2 + 1],
       0, 0);
 
     const uv1 = Vec4f.init(
-      mesh.textureCoordBuffer[mesh.indexUVBuffer[(offset+1)]*2 + 0],
-      mesh.textureCoordBuffer[mesh.indexUVBuffer[(offset+1)]*2 + 1],
+      d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset+1)]*2 + 0],
+      d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset+1)]*2 + 1],
       0, 0);
 
     const uv2 = Vec4f.init(
-      mesh.textureCoordBuffer[mesh.indexUVBuffer[(offset+2)]*2 + 0],
-      mesh.textureCoordBuffer[mesh.indexUVBuffer[(offset+2)]*2 + 1],
+      d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset+2)]*2 + 0],
+      d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset+2)]*2 + 1],
       0, 0);
 
-    const wn0 = model.mul33_vec4(n0);
-    const wn1 = model.mul33_vec4(n1);
-    const wn2 = model.mul33_vec4(n2);
+    const wn0 = d.model.mul33_vec4(n0);
+    const wn1 = d.model.mul33_vec4(n1);
+    const wn2 = d.model.mul33_vec4(n2);
 
     
 
@@ -396,8 +499,8 @@ pub fn drawTri(
 
         while (x <= bounds.max.x) 
         {
-            var pprof = profile.?.beginSample("render.mesh.draw.tri.pixel");
-            defer profile.?.endSample(pprof);
+            // var pprof = profile.?.beginSample("render.mesh.draw.tri.pixel");
+            // defer profile.?.endSample(pprof);
 
             defer x += 1;
 
@@ -417,20 +520,20 @@ pub fn drawTri(
             // of the point on the 3D triangle that the pixel overlaps.
             const z =(tri.x * v0.z + tri.y * v1.z + tri.z * v2.z);
 
-            if (shader.depthTest == 1 and depthBuffer.setLessThan(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
+            if (d.shader.depthTest == 1 and depthBuffer.setLessThan(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
                 continue;
 
             p.z = z;
 
-            var pdprof = profile.?.beginSample("render.mesh.draw.tri.pixel.draw");
-            defer profile.?.endSample(pdprof);
+            // var pdprof = profile.?.beginSample("render.mesh.draw.tri.pixel.draw");
+            // defer profile.?.endSample(pdprof);
 
             // interpolate vertex colors across all pixels
             fbc = Vec4f.triInterp(tri, c0, c1, c2, 1.0, 1.0);
             pixelNormal = Vec4f.triInterp(tri, wn0, wn1, wn2, 1.0, 1.0);
             uv = Vec4f.triInterp(tri, uv0, uv1, uv2, 1.0, 1.0);
 
-            var vc = shader.pixelShader(mvp, p, fbc, pixelNormal, uv, shader);
+            var vc = d.shader.pixelShader(d.mvp, p, fbc, pixelNormal, uv, d.shader);
 
             if(vc.w <= 0.0)
               continue;
@@ -446,8 +549,6 @@ pub fn drawTri(
             writePixel(@floatToInt(i32, x), @floatToInt(i32, y), z, c);
         }
     }
-
-   
 
     // var center = mv0.addDup(mv1);
     // center.add(mv2);
@@ -503,4 +604,5 @@ pub fn endFrame() void {
 pub fn shutdown() void {
   colorBuffer.deinit();
   depthBuffer.deinit();
+  triData.deinit();
 }
