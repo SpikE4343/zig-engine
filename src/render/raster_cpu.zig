@@ -220,7 +220,7 @@ pub const TriRenderJob = struct {
 
 var triData:std.ArrayList(TriRenderJob) = undefined;
 var renderQueue = JobQueue.init();
-var renderWorkers:[8]JobWorker = undefined;
+var renderWorkers:jobs.WorkerPool = undefined;
 
 
 pub fn drawLine(xFrom: i32, yFrom: i32, xTo: i32, yTo: i32, color: Color) void {
@@ -244,20 +244,8 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
     triData = try std.ArrayList(TriRenderJob).initCapacity(alloc, 1024);
     try triData.resize(1024);
 
-    renderWorkers = [_]JobWorker{
-      try JobWorker.init(0, &renderQueue),
-      try JobWorker.init(1, &renderQueue),
-      try JobWorker.init(2, &renderQueue),
-      try JobWorker.init(3, &renderQueue),
-      try JobWorker.init(4, &renderQueue),
-      try JobWorker.init(5, &renderQueue),
-      try JobWorker.init(6, &renderQueue),
-      try JobWorker.init(7, &renderQueue),
-    };
-
-    for(renderWorkers) |*worker| {
-      try worker.start();
-    }
+    renderWorkers = try jobs.WorkerPool.init(&renderQueue, alloc, 8);
+    try renderWorkers.start();
 }
 
 pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, shader: *Material) void {
