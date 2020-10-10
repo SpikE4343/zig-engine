@@ -1,2 +1,3 @@
 zig-cache/
 zig-engine.code-workspace
+external/SDL2-2.0.12

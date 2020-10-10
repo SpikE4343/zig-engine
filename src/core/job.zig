@@ -146,11 +146,49 @@ pub const JobWorker = struct {
     }
   }
 
-  pub fn stop() void {
+  pub fn stop(self:*JobWorker) !void {
     self.active = false;
   }
 };
 
+
+/// Group of workers pulling from the same queue
+pub const WorkerPool = struct {
+  workers: std.ArrayList(JobWorker),
+  queue: *JobQueue,
+
+  pub fn init(queue: *JobQueue, allocator: *std.mem.Allocator, workerCount:u8) !WorkerPool {
+    var workers = try std.ArrayList(JobWorker).initCapacity(allocator, workerCount);
+
+    var w = workerCount;
+    while(w > 0){
+      try workers.append(try JobWorker.init(w, queue));
+    }
+
+    return WorkerPool {
+      .workers = workers,
+      .queue = queue,
+    };
+  }
+
+  /// Begin all jobs executing off of the queue
+  pub fn start(self:*WorkerPool) !void {
+    for(self.workers.items) |*w| {
+      try w.start();
+    }
+  }
+
+  pub fn stop(self:*WorkerPool) !void {
+    for(self.workers.items) |*w| {
+      try w.stop();
+    }
+  }
+
+  pub fn deinit(self:*WorkerPool) void {
+    self.stop();
+    self.workers.deinit();
+  }
+};
 
 pub const TestJob = struct {
   job: Job,
@@ -178,7 +216,6 @@ pub const TestJob = struct {
     const self = @fieldParentPtr(TestJob, "job", job);
   }
 };
-
 
 pub const TestJob2 = struct {
   job: Job,
@@ -306,6 +343,42 @@ test "Job Workers"
   while(!queue.isEmpty())
     std.time.sleep(1_000_000);
 
+    //std.os.sleep(100);  
+  assert(queue.isEmpty());
+}
+
+
+test "Job Worker Pool" 
+{
+  var allocator = std.heap.page_allocator;
+  var queue = JobQueue.init();
+  var pool = try WorkerPool.init(&queue, allocator, 8);
+
+
+  const jobs = [_]TestJob{
+    TestJob.init(0),
+    TestJob.init(1),
+    TestJob.init(2),
+    TestJob.init(3),
+    TestJob.init(4),
+    TestJob.init(5),
+    TestJob.init(6),
+    TestJob.init(7),
+  };
+
+  std.time.sleep(1_000_000);
+  
+  for(jobs) |j| {
+    var job = j.job;
+    queue.push(&job);
+  }
+
+  try pool.start();
+
+  while(!queue.isEmpty())
+    std.time.sleep(1_000_000);
+
+  try pool.stop();
     //std.os.sleep(100);  
   assert(queue.isEmpty());
 }
