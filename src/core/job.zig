@@ -5,8 +5,14 @@ const interp = @import("interp.zig");
 
 pub const Job = struct {
   pub const Error = error{JobError};
+  pub const Result = enum {
+    Complete,
+    Retry,
+    Abort
+  };
 
-  pub const ExecuteFunc = fn (self:*Job) Error!void;
+
+  pub const ExecuteFunc = fn (self:*Job) Error!Result;
   pub const AbortFunc = fn (self:*Job) Error!void;
 
   executeFn: ExecuteFunc,
@@ -18,12 +24,16 @@ pub const Job = struct {
   next: ?*Job = null,
 
 
-  pub fn execute(self:*Job) Error!void {
-    try self.executeFn(self);
+  pub fn execute(self:*Job) Error!Result {
+    return try self.executeFn(self);
   }
 
   pub fn abort(self:*Job) Error!void {
     try self.abortFn(self);
+  }
+
+  pub fn implementor(self:*Job, comptime T: type, comptime field:[]const u8) *T{
+    return @fieldParentPtr(T, field, self);
   }
 
   pub fn implement(comptime T:type, e:ExecuteFunc, a:AbortFunc) T {
@@ -56,7 +66,7 @@ pub fn InPlaceQueue(comptime T:type) type {
         };
       } 
 
-      pub fn push(self:*Self, node:*T) void {
+      pub fn push(self:*Self, node:?*T) void {
         //std.debug.warn("push: {}\n",.{std.Thread.getCurrentId()});
         const held = self.lock.acquire();
         defer held.release();
@@ -114,14 +124,14 @@ pub fn InPlaceQueue(comptime T:type) type {
 
 const JobQueue = InPlaceQueue(Job);
 
-pub const JobWorker = struct {
+pub const Worker = struct {
   pending:*JobQueue,
   thread: *std.Thread,
   id:u8,
   active:bool,
 
-  pub fn init(ident:u8, queue:*JobQueue) !JobWorker {
-    var worker = JobWorker{
+  pub fn init(ident:u8, queue:*JobQueue) !Worker {
+    var worker = Worker{
       .id = ident,
       .pending = queue,
       .thread = undefined,
@@ -131,39 +141,42 @@ pub const JobWorker = struct {
     return worker;
   }
 
-  pub fn start(self:*JobWorker) !void {
-    self.thread = try std.Thread.spawn(self, JobWorker.run);
+  pub fn start(self:*Worker) !void {
+    self.thread = try std.Thread.spawn(self, Worker.run);
   }
 
-  pub fn run(self:*JobWorker) void {
+  pub fn run(self:*Worker) void {
     self.active = true;
     while(self.active)
     {
       //std.debug.warn("run: {}, {}\n", .{self.id, std.Thread.getCurrentId()});
       var job = self.pending.popWait();
-      job.?.execute() catch unreachable;
-      
+      const result = job.?.execute() catch unreachable;
+      switch(result) {
+        .Complete, .Abort => {},
+        .Retry => self.pending.push(job.?),
+      }
+    
     }
   }
 
-  pub fn stop(self:*JobWorker) !void {
+  pub fn stop(self:*Worker) !void {
     self.active = false;
   }
 };
 
-
 /// Group of workers pulling from the same queue
 pub const WorkerPool = struct {
-  workers: std.ArrayList(JobWorker),
+  workers: std.ArrayList(Worker),
   queue: *JobQueue,
 
   pub fn init(queue: *JobQueue, allocator: *std.mem.Allocator, workerCount:u8) !WorkerPool {
-    var workers = try std.ArrayList(JobWorker).initCapacity(allocator, workerCount);
+    var workers = try std.ArrayList(Worker).initCapacity(allocator, workerCount);
 
     var w = workerCount;
     while(w > 0) {
       defer w -= 1;
-      try workers.append(try JobWorker.init(w, queue));
+      try workers.append(try Worker.init(w, queue));
     }
 
     return WorkerPool {
@@ -191,6 +204,11 @@ pub const WorkerPool = struct {
   }
 };
 
+
+//
+// Tests
+//
+
 pub const TestJob = struct {
   job: Job,
   id: u8,
@@ -208,9 +226,10 @@ pub const TestJob = struct {
     };
   }
 
-  fn execute(job:*Job) !void {
+  fn execute(job:*Job) !Job.Result {
     const self = @fieldParentPtr(TestJob, "job", job);
     std.debug.warn("\t job: {} execution!\n", .{self.id});
+    return Job.Result.Complete;
   }
 
   fn abort(job:*Job) !void {
@@ -229,9 +248,10 @@ pub const TestJob2 = struct {
     );
   }
 
-  fn execute(job:*Job) !void {
+  fn execute(job:*Job) !Job.Result {
     const self = @fieldParentPtr(TestJob2, "job", job);
     std.debug.warn("execution2!\n", .{});
+    return Job.Result.Complete;
   }
 
   fn abort(job:*Job) !void {
@@ -239,26 +259,25 @@ pub const TestJob2 = struct {
   }
 };
 
+
 const assert = @import("std").debug.assert;
-
-
-
 test "Job Interface Basic Execute" 
 {
   var testjob = TestJob.init(0);
   var job:*Job = &testjob.job;
-  try job.execute();
+  _=try job.execute();
   try job.abort();
 
 
   var testjob2 = TestJob2.init();
   job = &testjob2.job;
-  try job.execute();
+  _=try job.execute();
   try job.abort();
 }
 
-fn anonExec(self:*Job) !void {
+fn anonExec(self:*Job) !Job.Result {
   std.debug.warn("execution anon exec!\n", .{});
+  return Job.Result.Complete;
 }
 
 fn anonAbort(self:*Job) !void {
@@ -276,13 +295,13 @@ test "Anonymous Job Interface Basic"
 
   var job:*Job = &j;
 
-  try job.execute();
+  _=try job.execute();
   try job.abort();
 
 
   var testjob2 = TestJob2.init();
   job = &testjob2.job;
-  try job.execute();
+  _=try job.execute();
   try job.abort();
 }
 
@@ -303,7 +322,7 @@ test "Job Queue"
   var pj = queue.pop();
 
   assert(pj == job);
-  try pj.?.execute();
+  _=try pj.?.execute();
 }
 
 test "Job Workers" 
@@ -312,11 +331,11 @@ test "Job Workers"
   var queue = JobQueue.init();
   
   
-  var workers = [_]JobWorker{
-    try JobWorker.init(0, &queue),
-    try JobWorker.init(1, &queue),
-    try JobWorker.init(2, &queue),
-    try JobWorker.init(3, &queue),
+  var workers = [_]Worker{
+    try Worker.init(0, &queue),
+    try Worker.init(1, &queue),
+    try Worker.init(2, &queue),
+    try Worker.init(3, &queue),
   };
 
   const jobs = [_]TestJob{
@@ -347,7 +366,6 @@ test "Job Workers"
     //std.os.sleep(100);  
   assert(queue.isEmpty());
 }
-
 
 test "Job Worker Pool" 
 {

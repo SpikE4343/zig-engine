@@ -124,6 +124,7 @@ pub fn update() bool
 
     viewMat = trans;
   
+    //modelMat.mul33(engine.Mat44f.rotY(rot));
     
 
     _=engine.sys.showMouseCursor(~input.getMouseRight());

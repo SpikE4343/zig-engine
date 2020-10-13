@@ -22,7 +22,7 @@ Write a software rendering engine and explore some zig at the same time.
     * Input
     * System
 
-    - [ ] Double buffer profiler to display last frame while rendering/updating next frame
+    - [x] Double buffer profiler to display last frame while rendering/updating next frame
     - [ ] Threaded write to disk?
 
   
@@ -46,8 +46,8 @@ Write a software rendering engine and explore some zig at the same time.
 
 ### Rendering
   - [ ] Ui Render texture different from world
-  - [ ] Text Rendering
-  - [ ] Profiler Rendering
+  - [x] Text Rendering
+  - [x] Profiler Rendering
   
   
 #### Done
@@ -62,7 +62,7 @@ Write a software rendering engine and explore some zig at the same time.
   - [ ] Voxel based world
   - [ ] Explore raytracing
   - [ ] Height Map Terrain Rendering
-  - [ ] Parallel Rendering using Job/Task system
+  - [x] Parallel Rendering using Job/Task system
 
 
 ### Runtime Libraries?

@@ -40,12 +40,24 @@ pub fn PixelBuffer( comptime PixelType : type) type
       std.mem.set(PixelType, self.*.buffer.items[0..], p);
     }
 
+    pub inline fn pxIndex(self:*SelfType, x:i32, y:i32 ) usize{
+      return @intCast(usize, x + self.*.w * y);
+    }
+
     pub inline fn write(self: *SelfType, x: i32, y: i32, value: PixelType) void {
       self.*.buffer.items[@intCast(usize, x + self.*.w * y)] = value;
     }
 
+    pub inline fn writeIndex(self: *SelfType, index:usize, value: PixelType) void {
+      self.*.buffer.items[index] = value;
+    }
+
     pub inline fn read(self: *SelfType, x: i32, y:i32) PixelType {
       return self.*.buffer.items[@intCast(usize, x + self.*.w * y)];
+    }
+
+    pub inline fn readIndex(self: *SelfType, index:usize) PixelType {
+      return self.*.buffer.items[index];
     }
 
     pub inline fn setLessThan(self:*SelfType, x: i32, y: i32, value:PixelType) u1 {

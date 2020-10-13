@@ -158,6 +158,54 @@ var profile: ?*Profile = undefined;
 var allocator: *std.mem.Allocator = undefined;
 var colorRenderer:PixelRenderer(Color) = undefined;
 
+pub const Stats = struct {
+  totalMeshes:u32,
+  totalTris:u32,
+  totalPixels:u32,
+  
+  renderedMeshes:u32,
+  renderedTris:u32,
+  renderedPixels:u32,
+
+  pub fn init() Stats {
+    return Stats{
+      .totalMeshes=0,
+      .totalTris=0,
+      .totalPixels=0,
+      .renderedMeshes=0,
+      .renderedTris=0,
+      .renderedPixels=0,
+    };
+  }
+
+  pub fn reset(self:*Stats) void {
+    self.totalMeshes = 0;
+    self.totalTris = 0;
+    self.totalPixels = 0;
+    self.renderedMeshes = 0;
+    self.renderedTris = 0;
+    self.renderedPixels = 0;
+  }
+
+
+  pub fn print(self:*Stats) void {
+    std.debug.warn(" [ m({}, {}|{d:.2}%), t({}, {}|{d:.2}%), p({}, {}|{d:.2}%) ]\n", .{
+      self.renderedMeshes,
+      self.totalMeshes,
+      @intToFloat(f32,self.renderedMeshes)/@intToFloat(f32,self.totalMeshes)*100.0,
+
+      self.renderedTris,
+      self.totalTris,
+      @intToFloat(f32,self.renderedTris)/@intToFloat(f32,self.totalTris)*100.0,
+      
+      self.renderedPixels,
+      self.totalPixels,
+      @intToFloat(f32,self.renderedPixels)/@intToFloat(f32,self.totalPixels)*100.0,
+    });      
+  }
+};
+
+
 pub const TriRenderJob = struct {
   job: Job,
   id: u8,
@@ -204,15 +252,16 @@ pub const TriRenderJob = struct {
      };
   }
 
-  fn execute(job:*Job) !void {
-    const self = @fieldParentPtr(TriRenderJob, "job", job);
+  fn execute(job:*Job) !Job.Result {
+    const self = job.implementor(TriRenderJob, "job");
     //std.debug.warn("\t job: {} execution!\n", .{self.id});
     drawTri(self);
     self.complete = true;
+    return Job.Result.Complete;
   }
 
   fn abort(job:*Job) !void {
-    const self = @fieldParentPtr(TriRenderJob, "job", job);
+    const self = job.implementor(TriRenderJob, "job");
   }
 };
 
@@ -221,7 +270,11 @@ pub const TriRenderJob = struct {
 var triData:std.ArrayList(TriRenderJob) = undefined;
 var renderQueue = JobQueue.init();
 var renderWorkers:jobs.WorkerPool = undefined;
+var stats = Stats.init();
 
+pub fn frameStats() Stats {
+  return stats;
+}
 
 pub fn drawLine(xFrom: i32, yFrom: i32, xTo: i32, yTo: i32, color: Color) void {
   colorRenderer.drawLine(xFrom, yFrom, xTo, yTo, color);
@@ -251,6 +304,8 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
 pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, shader: *Material) void {
     var sp = profile.?.beginSample("render.mesh.draw");
     defer profile.?.endSample(sp);
+
+    _= @atomicRmw(u32, &stats.totalMeshes, .Add, 1, .SeqCst);
 
     var mv = m.*;
     mv.mul(v.*);
@@ -285,14 +340,16 @@ pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mes
     t = 0;
     while (t < ids) {
         var wait:u64 = 0;
-        var wt = profile.?.beginSample("render.mesh.wait.tri");
-        defer profile.?.endSample(wt);
+        // var wt = profile.?.beginSample("render.mesh.wait.tri");
+        // defer profile.?.endSample(wt);
         var data = &triData.items[t/3];
         while(!data.complete)
           wait += 1;
 
         t += 3;
     }
+
+    _= @atomicRmw(u32, &stats.renderedMeshes, .Add, 1, .SeqCst);
 }
 
 pub fn drawPointMesh(mvp: *const Mat44f, mesh: *Mesh, shader:*Material) void {
@@ -317,7 +374,7 @@ pub fn drawString(font:*Font, str:[]const u8, x:i32, y:i32, color: Vec4f) void {
 
     var coy:i32 = 0;
     while(coy < font.glyphHeight){
-      defer coy += 1;
+      defer coy += 1; 
 
       var cox:i32 = 0;
       while(cox < font.glyphWidth-1){
@@ -363,6 +420,9 @@ pub fn drawWorldLine(mvp: *const Mat44f, start: Vec4f, end: Vec4f, color: Vec4f)
 
 /// Render triangle to frame buffer
 pub fn drawTri(d:*TriRenderJob) void {
+
+    _= @atomicRmw(u32, &stats.totalTris, .Add, 1, .SeqCst);
+    
     var vp = d.view.*;
     vp.mul(d.proj.*);
 
@@ -478,7 +538,7 @@ pub fn drawTri(d:*TriRenderJob) void {
     var uv: Vec4f = Vec4f.init(0, 0, 0, 1);
     var c: Color = Color.black();
     
-    
+    _= @atomicRmw(u32, &stats.renderedTris, .Add, 1, .SeqCst);
     
     while (y <= bounds.max.y) 
     {
@@ -489,6 +549,7 @@ pub fn drawTri(d:*TriRenderJob) void {
         {
             // var pprof = profile.?.beginSample("render.mesh.draw.tri.pixel");
             // defer profile.?.endSample(pprof);
+            _= @atomicRmw(u32, &stats.totalPixels, .Add, 1, .SeqCst);
 
             defer x += 1;
 
@@ -511,7 +572,7 @@ pub fn drawTri(d:*TriRenderJob) void {
             if (d.shader.depthTest == 1 and depthBuffer.setLessThan(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
                 continue;
 
-            p.z = z;
+            p.z = z; 
 
             // var pdprof = profile.?.beginSample("render.mesh.draw.tri.pixel.draw");
             // defer profile.?.endSample(pdprof);
@@ -534,6 +595,7 @@ pub fn drawTri(d:*TriRenderJob) void {
             c.setB(@floatToInt(u8, @fabs(vc.z)));
             c.setA(@floatToInt(u8, @fabs(vc.w)));
 
+            _= @atomicRmw(u32, &stats.renderedPixels, .Add, 1, .SeqCst);
             writePixel(@floatToInt(i32, x), @floatToInt(i32, y), z, c);
         }
     }
@@ -576,12 +638,16 @@ pub fn writePixel(x: i32, y: i32, z: f32, c: Color) void {
     depthBuffer.write(x, y, z);
 }
 
-pub fn beginFrame() *u8 {
+pub fn beginFrame(profiler:?*Profile) *u8 {
+    profile = profiler;
     var pprof = profile.?.beginSample("render.beginFrame");
     defer profile.?.endSample(pprof);
 
+    stats.reset();
+
     colorBuffer.clear(Color.init(50,50,120,255));
     depthBuffer.clear(std.math.inf(f32));
+
     return &colorBuffer.bufferStart().color[0];
 }
 

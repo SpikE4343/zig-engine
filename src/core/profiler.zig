@@ -24,45 +24,7 @@ pub const Profile = struct {
     tag:[]const u8,
     begin : u64,
     end : u64,
-
-    // pub fn toTraceEvent(self:*Sample) TraceEventFormat {
-    //   return TraceEventFormat{
-    //     .name = self.tag,
-    //     .cat = TECategory.PERF,
-    //     .ph = TEType.X,
-    //     .pid=1,
-    //     .tid=1,
-    //     .ts=self.begin,
-    //     .duration = self.end-self.begin,
-    //   };
-    // }
   };
-
-
-  // // "name": "myName",
-  // // "cat": "category,list",
-  // // "ph": "B",
-  // // "ts": 12345,
-  // // "pid": 123,
-  // // "tid": 456,
-
-  // pub const TECategory = enum {
-  //   PERF,
-  // };
-
-  // pub const TEType = enum {
-  //   X, //
-  // };
-
-  // pub const TraceEventFormat = struct {
-  //   name :[]const u8,
-  //   cat:TECategory,
-  //   ph:TEType,
-  //   pid:i32,
-  //   tid:i32,
-  //   ts: u64,
-  //   duration: i64,
-  // };
 
 
   pub fn init(allocator:*std.mem.Allocator) !Profile {
