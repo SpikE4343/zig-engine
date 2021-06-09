@@ -56,13 +56,13 @@ pub fn importTGAFile(allocator: *Allocator, file_path: []const u8) !Texture
   var resolvedPath = try std.fs.path.resolve(allocator, &[_][]const u8{file_path});
   defer allocator.free(resolvedPath);
 
-  std.debug.warn("path: {}", .{resolvedPath});
+  std.debug.warn("path: {s}", .{resolvedPath});
 
   var file = try cwd.openFile(resolvedPath, .{});
   defer file.close();
 
   var stream_source = io.StreamSource{ .file = file };
-  var in = stream_source.inStream();
+  var in = stream_source.reader();
 
   const header = try in.readStruct(TGA_HEADER);
 

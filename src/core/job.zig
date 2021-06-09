@@ -1,6 +1,7 @@
 const std = @import("std");
 const math = std.math;
 const interp = @import("interp.zig");
+const trace = @import("../tracy.zig").trace;
 
 
 pub const Job = struct {
@@ -25,6 +26,8 @@ pub const Job = struct {
 
 
   pub fn execute(self:*Job) Error!Result {
+    const ta = trace(@src());
+    defer ta.end();
     return try self.executeFn(self);
   }
 
@@ -52,18 +55,21 @@ pub fn InPlaceQueue(comptime T:type) type {
 
       head:?*T=null,
       tail:?*T=null,
-      lock:std.Mutex,
-      wait:std.ResetEvent,
+      //lock:std.Mutex,
+      lock:std.Thread.Mutex,
+      wait:std.Thread.Semaphore,
       size:usize,
 
       pub fn init() Self {
-        return Self {
+        var s = Self {
           .head = null,
           .tail = null,
-          .lock = std.Mutex{},
-          .wait = std.ResetEvent.init(),
+          .lock = std.Thread.Mutex{},
+          .wait = undefined,
           .size = 0,
         };
+
+        return s;
       } 
 
       pub fn push(self:*Self, node:?*T) void {
@@ -81,11 +87,10 @@ pub fn InPlaceQueue(comptime T:type) type {
         if(self.head == null)
           self.head = self.tail;
 
-        self.wait.set();
+        self.wait.post();
       }
 
-      pub fn pop(self:*Self) ?*T {
-        //std.debug.warn("pop: {}, {}\n",.{std.Thread.getCurrentId(), self.lock});
+      pub fn pop(self:*Self) ?*T {        
         const held = self.lock.acquire();
         defer held.release();
 
@@ -95,23 +100,35 @@ pub fn InPlaceQueue(comptime T:type) type {
 
         self.size -= 1;
 
-        if(self.head == null)
-          self.wait.reset();
+        // if(self.head == null)
+        //   self.wait.reset();
 
         return node;
       }
 
       pub fn popWait(self:*Self) ?*T {
+
+        // const t = trace(@src());
+        // defer t.end();
+
         var attempts:u16 = 0;
         while(true)
         {
+          const ta = trace(@src());
+          defer ta.end();
+
           var job = self.pop();
           attempts += 1;
-          if(job == null) {
-            self.wait.wait();
-          } else {
-            //std.debug.warn("pop: {}, a:{}, s:{}\n",.{std.Thread.getCurrentId(), attempts, self.size});
+          
+          if(job != null)
             return job;
+
+          // only wait if the queue is empty
+          if(self.head == null)
+          {
+            const tf = trace(@src());
+            defer tf.end();
+            self.wait.wait();
           }
         }
       }
@@ -142,21 +159,25 @@ pub const Worker = struct {
   }
 
   pub fn start(self:*Worker) !void {
-    self.thread = try std.Thread.spawn(self, Worker.run);
+    self.thread = try std.Thread.spawn(Worker.run, self);
   }
 
   pub fn run(self:*Worker) void {
     self.active = true;
     while(self.active)
     {
-      //std.debug.warn("run: {}, {}\n", .{self.id, std.Thread.getCurrentId()});
       var job = self.pending.popWait();
+
+      const ta = trace(@src());
+      defer ta.end();
+
+
       const result = job.?.execute() catch unreachable;
-      switch(result) {
+      switch(result) 
+      {
         .Complete, .Abort => {},
         .Retry => self.pending.push(job.?),
       }
-    
     }
   }
 

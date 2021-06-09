@@ -26,6 +26,8 @@ const JobQueue = jobs.InPlaceQueue(Job);
 pub const material = @import("material.zig");
 pub const Material = material.Material;
 
+const trace = @import("../tracy.zig").trace;
+
 /// RGBA 32 bit color value
 pub const Color = struct {
     color: [4]u8 = [4]u8{ 0, 0, 0, 0 },
@@ -254,9 +256,10 @@ pub const TriRenderJob = struct {
 
   fn execute(job:*Job) !Job.Result {
     const self = job.implementor(TriRenderJob, "job");
-    //std.debug.warn("\t job: {} execution!\n", .{self.id});
+    
     drawTri(self);
     self.complete = true;
+    //std.debug.warn("\t job: {}:{} execution!\n", .{self.id, self.complete});
     return Job.Result.Complete;
   }
 
@@ -297,11 +300,13 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
     triData = try std.ArrayList(TriRenderJob).initCapacity(alloc, 1024);
     try triData.resize(1024);
 
-    renderWorkers = try jobs.WorkerPool.init(&renderQueue, alloc, 8);
+    renderWorkers = try jobs.WorkerPool.init(&renderQueue, alloc, 4);
     try renderWorkers.start();
 }
 
 pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, shader: *Material) void {
+    const tracy = trace(@src());
+    defer tracy.end();
     var sp = profile.?.beginSample("render.mesh.draw");
     defer profile.?.endSample(sp);
 
@@ -338,13 +343,19 @@ pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mes
     }
 
     t = 0;
-    while (t < ids) {
+    while (t < ids ) {
         var wait:u64 = 0;
-        // var wt = profile.?.beginSample("render.mesh.wait.tri");
-        // defer profile.?.endSample(wt);
-        var data = &triData.items[t/3];
-        while(!data.complete)
+        var wt = profile.?.beginSample("render.mesh.wait.tri");
+        defer profile.?.endSample(wt);
+        var job:*TriRenderJob = &triData.items[t/3];
+        
+        while(!job.complete)// and wait < 1_000_000)
+        {
+          std.atomic.spinLoopHint();
+          // std.SpinLock.yield();
+          //std.debug.warn("\t job: {}:{}:{} waiting!\n", .{job.id, job.complete, wait});
           wait += 1;
+        }
 
         t += 3;
     }
@@ -417,10 +428,43 @@ pub fn drawWorldLine(mvp: *const Mat44f, start: Vec4f, end: Vec4f, color: Vec4f)
             c);
 }
 
+pub const TriRenderData = struct {
+  pub const Visible = 1 << 0;
+  pub const TooSmall = 1 << 1;
+
+  // From Mesh
+  vi:[3]u16,    // vertex indicies
+  rv:[3]Vec4f,  // raw verticies (un-transformed)
+  vc:[3]Vec4f,
+  uv:[3]Vec4f,
+  vn:[3]Vec4f,
+  
+  v:[3]Vec4f,   // transformed and projected verticies
+
+  vp:Mat44f,    // View * Projection
+  mv:[3]Vec4f,  // Model * View
+
+  
+  normal:Vec4f, 
+  edges:[3]Vec4f,  
+  screenArea:f32,
+  flags:u32,
+  
+  // Per-Pixel
+  x:f32,
+  y:f32,
+  p:Vec4f,
+  worldPixel: Vec4f,
+  pixelNormal:Vec4f,
+  fbc: Vec4f,
+  
+  c: Color,
+};
 
 /// Render triangle to frame buffer
 pub fn drawTri(d:*TriRenderJob) void {
-
+    const tracy = trace(@src());
+    defer tracy.end();
     _= @atomicRmw(u32, &stats.totalTris, .Add, 1, .SeqCst);
     
     var vp = d.view.*;
@@ -539,7 +583,20 @@ pub fn drawTri(d:*TriRenderJob) void {
     var c: Color = Color.black();
     
     _= @atomicRmw(u32, &stats.renderedTris, .Add, 1, .SeqCst);
+
+
+    // while (y <= bounds.max.y) 
+    // {
+    //   var x = bounds.min.x;
+    //   defer y += 1;
+
+    //   while (x <= bounds.max.x) 
+    //   {
+    //     defer x += 1;
+    //   }
+    // }
     
+    // var y = bounds.min.y;
     while (y <= bounds.max.y) 
     {
         var x = bounds.min.x;
@@ -547,6 +604,8 @@ pub fn drawTri(d:*TriRenderJob) void {
 
         while (x <= bounds.max.x) 
         {
+          // const pixtracy = trace(@src());
+          // defer pixtracy.end();
             // var pprof = profile.?.beginSample("render.mesh.draw.tri.pixel");
             // defer profile.?.endSample(pprof);
             _= @atomicRmw(u32, &stats.totalPixels, .Add, 1, .SeqCst);

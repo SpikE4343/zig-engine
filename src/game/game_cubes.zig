@@ -30,7 +30,7 @@ pub fn init() !void {
         1000
         );
 
-    //mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/cube.obj");
+    //cubeMesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/cube.obj");
     //mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/bed.obj");
     mesh = try tools.MeshObjLoader.importObjFile(meshAllocator, "../../assets/suzanne.obj");
     // var  texture = try tools.TgaTexLoader.importTGAFile(textureAllocator, "../../assets/black_rock.tga");

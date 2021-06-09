@@ -129,7 +129,7 @@ pub fn recalculateNormals_old(self:*Mesh) void
   tri = 0;
   while(tri < self.vertexNormalBuffer.len)
   {
-    warn("\n[{}] : ", .{tri});
+    // warn("\n[{}] : ", .{tri});
     self.vertexNormalBuffer[tri].w = 1;
     self.vertexNormalBuffer[tri].normalize3();
     tri += 1;

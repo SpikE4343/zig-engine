@@ -19,8 +19,10 @@ pub const blend = @import("core/interp.zig");
 
 pub const Mesh = @import("render/mesh.zig").Mesh;
 
-pub var stdout = std.io.getStdOut();
+pub const trace = @import("tracy.zig").trace;
 
+
+pub var stdout = std.io.getStdOut();
 var bufferAllocator = std.heap.page_allocator;
 
 pub const systemConfig = sys.Config{
@@ -104,6 +106,8 @@ pub fn main() !void {
 
     while (!quit) 
     {
+      const tracy = trace(@src());
+      defer tracy.end();
         {
             var el = Sampler.initAndBegin(profiler,"engine.main");
             defer el.end();
@@ -164,7 +168,7 @@ pub fn main() !void {
 
     }
 
-    try lastProfile.jsonFileWrite(bufferAllocator, "prof.json");
+    //try lastProfile.jsonFileWrite(bufferAllocator, "prof.json");
 
     //bufferAllocator.deinit();
 }

@@ -124,13 +124,13 @@ pub fn importObjFile(allocator: *Allocator, file_path: []const u8) !Mesh
   var resolvedPath = try std.fs.path.resolve(allocator, &[_][]const u8{file_path});
   defer allocator.free(resolvedPath);
 
-  std.debug.warn("path: {}", .{resolvedPath});
+  std.debug.warn("path: {s}", .{resolvedPath});
 
   var file = try cwd.openFile(resolvedPath, .{});
   defer file.close();
 
   var stream_source = io.StreamSource{ .file = file };
-  var in = stream_source.inStream();
+  var in = stream_source.reader();
   var state : State = .Read;
   var data :u8 = 0;
 
@@ -196,7 +196,7 @@ pub fn importObjFile(allocator: *Allocator, file_path: []const u8) !Mesh
     if(read <= 4 )
       continue;
     
-    std.debug.warn("[{}]: {}\n", .{lineCount, line});
+    // std.debug.warn("[{any}]: {any}\n", .{lineCount, line});
     switch(line[0]){
       // vertex information
       'v' => 

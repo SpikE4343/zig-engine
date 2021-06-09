@@ -26,11 +26,11 @@ pub const Face = struct {
   
 
   pub fn print(self:Vec4f) void {
-    std.debug.warn(" [{}, {}, {}, {} | {} | {} ]", .{self.x, self.y, self.z, self.w, self.length(), self.length3()});      
+    std.debug.warn(" [{e}, {e}, {e}, {e} | {e} | {e} ]", .{self.x, self.y, self.z, self.w, self.length(), self.length3()});      
   }
 
   pub fn println(self:Vec4f) void {
-    std.debug.warn(" [{}, {}, {}, {} | {} | {} ]\n", .{self.x, self.y, self.z, self.w, self.length(), self.length3()});      
+    std.debug.warn(" [{e}, {e}, {e}, {e} | {e} | {e} ]\n", .{self.x, self.y, self.z, self.w, self.length(), self.length3()});      
   }
  
 

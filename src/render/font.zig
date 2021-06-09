@@ -46,7 +46,7 @@ test "Char offset" {
   const ctx = (c % gwidth) * glyphWidth;
 
   const offset = cy * glyphWidth + cx;
-  std.debug.warn("c: {}, cy: {}, cx: {}, cty: {}, ctx: {}\n", .{c, cy, cx, cty, ctx});
+  std.debug.warn("c: {any}, cy: {any}, cx: {any}, cty: {any}, ctx: {any}\n", .{c, cy, cx, cty, ctx});
 }
     
 

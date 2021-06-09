@@ -117,7 +117,7 @@ pub const Profile = struct {
   }
 
   pub fn jsonPrint(self:*Profile, file:File ) !void {
-    var stream = file.outStream();
+    var stream = file.writer();
     try stream.print("{{ \"traceEvents\":[", .{});
 
     for(self.samples.items) |sample, i| 
@@ -131,7 +131,7 @@ pub const Profile = struct {
       const begin = sample.begin - self.frameStartTime;
       const end = sample.end - self.frameStartTime;
 
-      try stream.print("{{ \"name\": \"{}\", \"cat\":\"{}\",\"ph\":\"{}\",\"pid\": {},\"tid\": {},\"ts\": {}, \"dur\":{} }}", 
+      try stream.print("{{ \"name\": \"{s}\", \"cat\":\"{s}\",\"ph\":\"{s}\",\"pid\": {any},\"tid\": {any},\"ts\": {any}, \"dur\":{any} }}", 
         .{sample.tag, "PERF", "X", 1, 1, begin, end-begin});
 
       //std.debug.warn("{}, {}\n", .{i, self.nextSample});
@@ -148,7 +148,7 @@ pub const Profile = struct {
     var resolvedPath = try std.fs.path.resolve(allocator, &[_][]const u8{filepath});
     defer allocator.free(resolvedPath);
 
-    std.debug.warn("path: {}", .{resolvedPath});
+    std.debug.warn("path: {s}", .{resolvedPath});
 
     var file = try cwd.createFile(resolvedPath, .{});
     defer file.close();
@@ -167,7 +167,7 @@ pub const Profile = struct {
       
       const begin = sample.begin - self.frameStartTime;
       const end = sample.end - self.frameStartTime;
-      try stream.print("{}, {}, {}, {}, {}, {}, {}, {}\n", .{
+      try stream.print("{any}, {any}, {any}, {any}, {any}, {any}, {any}, {any}\n", .{
         self.frameCount,
         self.frameStartTime,
         i,
