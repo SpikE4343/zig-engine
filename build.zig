@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const os = std.os;
 const Builder = std.build.Builder;
 
@@ -8,24 +9,26 @@ pub fn build(b: *Builder) void {
 
     // const libgame = b.addSharedLibrary("game", "src/game/game_cubes.zig", b.version(0, 1, 0));
 
+    
     // exe.linkLibrary(libgame);
     //exe.setBuildMode(mode);
     //exe.setBuildMode(std.builtin.Mode.ReleaseSafe);
-    exe.setBuildMode(std.builtin.Mode.ReleaseFast);
+    exe.setBuildMode(std.builtin.Mode.Debug);
 
-    const tracyPath = "../../tracy";
 
-    const client_cpp = std.fs.path.join(
-        b.allocator,
-        &[_][]const u8{ tracyPath, "TracyClient.cpp" }
-    ) catch unreachable;
+    // const tracyPath = "../../tracy";
 
-    exe.addIncludeDir(tracyPath);
-    //exe.addCSourceFile(client_cpp, &[_][]const u8{"-DTRACY_ENABLE=1", "-fno-sanitize=undefined"});
+    // const client_cpp = std.fs.path.join(
+    //     b.allocator,
+    //     &[_][]const u8{ tracyPath, "TracyClient.cpp" }
+    // ) catch unreachable;
+
+    // exe.addIncludeDir(tracyPath);
+    // exe.addCSourceFile(client_cpp, &[_][]const u8{"-DTRACY_ENABLE=1", "-fno-sanitize=undefined"});
     
 
 
-    if(std.builtin.os.tag == .windows) {
+    if(builtin.os.tag == .windows) {
         exe.addIncludeDir("external/SDL2-2.0.12/include");
         exe.linkSystemLibrary("external/SDL2-2.0.12/lib/x64/SDL2");
     } else {    

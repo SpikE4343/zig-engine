@@ -1,7 +1,7 @@
 // platform imports
 const std = @import("std");
 const fmt = std.fmt;
-const warn = std.debug.warn;
+const warn = std.debug.print;
 const assert = std.debug.assert;
 const Timer = std.time.Timer;
 
@@ -21,18 +21,17 @@ pub const Mesh = @import("render/mesh.zig").Mesh;
 
 pub const trace = @import("tracy.zig").trace;
 
-
 pub var stdout = std.io.getStdOut();
 var bufferAllocator = std.heap.page_allocator;
 
-pub const systemConfig = sys.Config{
-  .windowWidth = 1024,
-  .windowHeight = 768,
-  .renderWidth = 320,
-  .renderHeight = 240,
-  .maxFps = 60,
-  .fullscreen = false,
-};
+// pub const systemConfig = sys.Config{
+//     .windowWidth = 1024,
+//     .windowHeight = 768,
+//     .renderWidth = 1024,
+//     .renderHeight = 768,
+//     .maxFps = 60,
+//     .fullscreen = false,
+// };
 
 // pub const systemConfig = sys.Config{
 //   .windowWidth = 1920,
@@ -43,41 +42,34 @@ pub const systemConfig = sys.Config{
 //   .fullscreen = true,
 // };
 
+pub const systemConfig = sys.Config{
+  .windowWidth = 1920,
+  .windowHeight = 1080,
+  .renderWidth = 426,
+  .renderHeight = 240,
+  .maxFps = 60,
+  .fullscreen = false,
+};
 
-// pub const systemConfig = sys.Config{
-//   .windowWidth = 1920,
-//   .windowHeight = 1080,
-//   .renderWidth = 426,
-//   .renderHeight = 240,
-//   .maxFps = 60,
-//   .fullscreen = true,
-// };
+var profileId: u1 = 0;
 
-var profileId:u1 = 0;
-
-var profiles:[2]Profile = undefined;
-
-  
+var profiles: [2]Profile = undefined;
 
 pub fn swapProfile() *Profile {
-  profileId = ~profileId;
-  return currentProfile();
+    profileId = ~profileId;
+    return currentProfile();
 }
 
 pub fn currentProfile() *Profile {
-  return &profiles[profileId];
+    return &profiles[profileId];
 }
 
 pub fn nextProfile() *Profile {
-  return &profiles[~profileId];
+    return &profiles[~profileId];
 }
 
 pub fn main() !void {
-
-    profiles = [2]Profile {
-      try Profile.init(bufferAllocator),
-      try Profile.init(bufferAllocator)
-    };
+    profiles = [2]Profile{ try Profile.init(&bufferAllocator), try Profile.init(&bufferAllocator) };
 
     var profiler = currentProfile();
     profiler.nextFrame();
@@ -85,11 +77,10 @@ pub fn main() !void {
     var lastProfile = nextProfile();
     lastProfile.nextFrame();
 
-
     try sys.init(systemConfig);
     defer sys.shutdown();
 
-    try render.init(systemConfig.renderWidth, systemConfig.renderHeight, bufferAllocator, profiler);
+    try render.init(systemConfig.renderWidth, systemConfig.renderHeight, &bufferAllocator, profiler);
     defer render.shutdown();
 
     const bufferLineSize = render.bufferLineSize();
@@ -97,23 +88,22 @@ pub fn main() !void {
     var quit = false;
     const targetFrameTimeNs = @intToFloat(f32, sys.targetFrameTimeMs() * 1_000_000);
 
-    _= try game.init();
+    _ = try game.init();
 
-    var mainSampler:Sampler = undefined;
-    var systemSampler:Sampler = undefined;
-    var gameSampler:Sampler = undefined;
-    var renderSampler:Sampler = undefined;
+    // var mainSampler:Sampler = undefined;
+    // var systemSampler:Sampler = undefined;
+    // var gameSampler:Sampler = undefined;
+    // var renderSampler:Sampler = undefined;
 
-    while (!quit) 
-    {
-      const tracy = trace(@src());
-      defer tracy.end();
+    while (!quit) {
+        // const tracy = trace(@src());
+        // defer tracy.end();
         {
-            var el = Sampler.initAndBegin(profiler,"engine.main");
+            var el = Sampler.initAndBegin(profiler, "engine.main");
             defer el.end();
-            
+
             {
-                var supdate = Sampler.initAndBegin(profiler,"system.update");
+                var supdate = Sampler.initAndBegin(profiler, "system.update");
                 defer supdate.end();
 
                 quit = !sys.beginUpdate();
@@ -123,8 +113,8 @@ pub fn main() !void {
             {
                 var c = Sampler.initAndBegin(profiler, "game.update");
                 defer c.end();
-                if(!game.update())
-                  break;
+                if (!game.update())
+                    break;
             }
             render.endFrame();
 
@@ -132,14 +122,12 @@ pub fn main() !void {
                 var srt = Sampler.initAndBegin(profiler, "engine.render.profile");
                 defer srt.end();
 
-                if(lastProfile.hasSamples())
-                {
-                  displayProfileUi(lastProfile, 2, 2, 3, systemConfig.renderWidth-5, 8, targetFrameTimeNs);
-                  //render.drawProgress(2, 2, 100, @intToFloat(f32, lastProfile.sampleTime(1)), targetFrameTimeNs );
-                  //render.drawProgress(2, 5, 100, @intToFloat(f32, lastProfile.sampleTime(2)), targetFrameTimeNs );
+                if (lastProfile.hasSamples()) {
+                    displayProfileUi(lastProfile, 2, 2, 3, systemConfig.renderWidth - 5, 8, targetFrameTimeNs);
+                    //render.drawProgress(2, 2, 100, @intToFloat(f32, lastProfile.sampleTime(1)), targetFrameTimeNs );
+                    //render.drawProgress(2, 5, 100, @intToFloat(f32, lastProfile.sampleTime(2)), targetFrameTimeNs );
                 }
             }
-
 
             {
                 var srt = Sampler.initAndBegin(profiler, "system.render.present");
@@ -153,19 +141,16 @@ pub fn main() !void {
                 var sup = Sampler.initAndBegin(profiler, "system.wait");
                 defer sup.end();
 
-                _= sys.endUpdate();
+                _ = sys.endUpdate();
             }
         }
 
-      
         lastProfile = profiler;
         profiler = swapProfile();
 
         render.frameStats().print();
 
         profiler.nextFrame();
-
-
     }
 
     //try lastProfile.jsonFileWrite(bufferAllocator, "prof.json");
@@ -173,60 +158,43 @@ pub fn main() !void {
     //bufferAllocator.deinit();
 }
 
-
-pub fn displayProfileUi(self:*Profile, x:i32, y:i32, lineSize:i32, maxWidth:f32, maxDepth:u8, targetNs:f32 ) void {
-
+pub fn displayProfileUi(self: *Profile, x: i32, y: i32, lineSize: i32, maxWidth: f32, maxDepth: u8, targetNs: f32) void {
     const mainSample = self.samples.items[1];
-    const totalBegin = @intToFloat(f32, mainSample.begin - self.frameStartTime);
+    // const totalBegin = @intToFloat(f32, mainSample.begin - self.frameStartTime);
     const totalEnd = @intToFloat(f32, mainSample.end - self.frameStartTime);
-    const totalTime = targetNs * 2;//@intToFloat(f32, mainSample.end-mainSample.begin);
-    
-    const targetx = x + @floatToInt(i32,(targetNs/totalTime)*maxWidth);
-    render.drawLine(
-        targetx,  y-2,
-        targetx,  y+lineSize*@intCast(i32,maxDepth),
-        render.Color.fromNormal(0.5, 0.0, 0.2, 0.7)
-      );
+    const totalTime = targetNs * 2; //@intToFloat(f32, mainSample.end-mainSample.begin);
 
-    const targetmidx = x + @floatToInt(i32,((targetNs/2)/totalTime)*maxWidth);
-    render.drawLine(
-        targetmidx,  y-2,
-        targetmidx,  y+lineSize*@intCast(i32,maxDepth),
-        render.Color.fromNormal(0.3, 0.3, 0.3, 0.7)
-      );
+    const targetx = x + @floatToInt(i32, (targetNs / totalTime) * maxWidth);
+    render.drawLine(targetx, y - 2, targetx, y + lineSize * @intCast(i32, maxDepth), render.Color.fromNormal(0.5, 0.0, 0.2, 0.7));
 
+    const targetmidx = x + @floatToInt(i32, ((targetNs / 2) / totalTime) * maxWidth);
+    render.drawLine(targetmidx, y - 2, targetmidx, y + lineSize * @intCast(i32, maxDepth), render.Color.fromNormal(0.3, 0.3, 0.3, 0.7));
 
-    for(self.samples.items) |sample, i| 
-    {
-      if( i > self.nextSample)
-        break;
+    for (self.samples.items) |sample, i| {
+        if (i > self.nextSample)
+            break;
 
-      if( sample.depth >= maxDepth)
-        continue;
+        if (sample.depth >= maxDepth)
+            continue;
 
-      if( i == 0 or sample.begin == 0 or sample.begin < self.frameStartTime)
-        continue;
-      
-      const begin = @intToFloat(f32, sample.begin - self.frameStartTime);
-      const end = @intToFloat(f32, sample.end - self.frameStartTime);
-      const duration = end-begin;
+        if (i == 0 or sample.begin == 0 or sample.begin < self.frameStartTime)
+            continue;
 
-      const cs = std.math.clamp(blend.invLerp(f32, 0, targetNs, totalEnd), 0.0, 1.0);
-      
-      const startx  = x + @floatToInt(i32, std.math.clamp(begin / totalTime, 0.0, 4.0) * maxWidth);
-      const finishx = x + @floatToInt(i32, std.math.clamp(end / totalTime, 0.0, 4.0) * maxWidth);
-      const ystart  = y + lineSize * @intCast(i32, sample.depth);
+        const begin = @intToFloat(f32, sample.begin - self.frameStartTime);
+        const end = @intToFloat(f32, sample.end - self.frameStartTime);
+        // const duration = end-begin;
 
-      //std.debug.warn("{} x: {}, fx:{}, y:{}, b:{}, e:{}, d:{}, t:{}\n", .{sample.depth, startx, finishx, ystart, begin, end, duration, sample.tag});
+        const cs = std.math.clamp(blend.invLerp(f32, 0, targetNs, totalEnd), 0.0, 1.0);
 
-      render.drawLine(
-        startx,  ystart,
-        finishx, ystart, 
-        render.Color.fromNormal(cs*cs, (1-(cs*cs)), 0.2, 1)
-      );
+        const startx = x + @floatToInt(i32, std.math.clamp(begin / totalTime, 0.0, 4.0) * maxWidth);
+        const finishx = x + @floatToInt(i32, std.math.clamp(end / totalTime, 0.0, 4.0) * maxWidth);
+        const ystart = y + lineSize * @intCast(i32, sample.depth);
+
+        //std.debug.warn("{} x: {}, fx:{}, y:{}, b:{}, e:{}, d:{}, t:{}\n", .{sample.depth, startx, finishx, ystart, begin, end, duration, sample.tag});
+
+        render.drawLine(startx, ystart, finishx, ystart, render.Color.fromNormal(cs * cs, (1 - (cs * cs)), 0.2, 1));
     }
-  }
-
+}
 
 // 0 x: 2, fx:202, y:2, b:2.61e+02, e:7.813682e+06, d:7.813421e+06, t:engine.main
 //   1 x: 2, fx:2, y:5, b:3.85e+02, e:6.299e+03, d:5.914e+03, t:system.update

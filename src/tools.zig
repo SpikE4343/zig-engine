@@ -1,7 +1,7 @@
 // platform imports
 const std = @import("std");
 const fmt = std.fmt;
-const warn = std.debug.warn;
+const warn = std.debug.print;
 const assert = std.debug.assert;
 const Timer = std.time.Timer;
 
