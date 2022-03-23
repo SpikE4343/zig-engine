@@ -21,7 +21,7 @@ const PixelRenderer = pixelbuffer.PixelRenderer;
 const jobs = @import("../core/job.zig");
 const Job = jobs.Job;
 const JobWorker = jobs.JobWorker;
-const JobQueue = jobs.InPlaceQueue(Job);
+const JobQueue = jobs.JobQueue;
 
 pub const material = @import("material.zig");
 pub const Material = material.Material;
@@ -216,13 +216,8 @@ pub const TriRenderJob = struct {
 
     pub fn init(ident: u8, model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh, shader: *Material) TriRenderJob {
         return TriRenderJob{
-            .job = Job{
-                // .priority = 0,
-                // .name = "testjob",
-                .executeFn = execute,
-                .abortFn = abort,
-            },
-
+            .job = Job.init(execute, abort),
+                
             .id = ident,
             .model = model,
             .view = view,
@@ -308,7 +303,7 @@ pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mes
 
         var data = &triData.items[t / 3];
         data.complete = false;
-        renderQueue.push(&data.job);
+        renderQueue.push(&data.job) catch continue;
         //drawTri(data);
         t += 3;
     }
@@ -638,6 +633,9 @@ pub fn writePixel(x: i32, y: i32, z: f32, c: Color) void {
 }
 
 pub fn beginFrame(profiler: ?*Profile) *u8 {
+    const tracy = trace(@src());
+    defer tracy.end();
+    
     profile = profiler;
     var pprof = profile.?.beginSample("render.beginFrame");
     defer profile.?.endSample(pprof);

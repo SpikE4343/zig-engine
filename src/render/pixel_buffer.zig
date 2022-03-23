@@ -8,6 +8,9 @@ const Vec4f = @import("../core/vector.zig").Vec4f;
 const Mat44f = @import("../core/matrix.zig").Mat44f;
 const Profile = @import("../core/profiler.zig").Profile;
 
+pub const trace = @import("../tracy.zig").trace;
+
+
 const Allocator = std.mem.Allocator;
 
 pub fn PixelBuffer(comptime PixelType: type) type {
@@ -34,6 +37,9 @@ pub fn PixelBuffer(comptime PixelType: type) type {
         }
 
         pub fn clear(self: *SelfType, p: PixelType) void {
+            const tracy = trace(@src());
+            defer tracy.end();
+    
             std.mem.set(PixelType, self.*.buffer.items[0..], p);
         }
 

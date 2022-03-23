@@ -96,8 +96,8 @@ pub fn main() !void {
     // var renderSampler:Sampler = undefined;
 
     while (!quit) {
-        // const tracy = trace(@src());
-        // defer tracy.end();
+        const tracy = trace(@src());
+        defer tracy.end();
         {
             var el = Sampler.initAndBegin(profiler, "engine.main");
             defer el.end();
@@ -145,12 +145,15 @@ pub fn main() !void {
             }
         }
 
-        lastProfile = profiler;
-        profiler = swapProfile();
+        if( !input.isKeyDown(input.KeyCode.SPACE))
+        {
+          lastProfile = profiler;
+          profiler = swapProfile();
+          
+          render.frameStats().print();
 
-        render.frameStats().print();
-
-        profiler.nextFrame();
+          profiler.nextFrame();
+        }
     }
 
     //try lastProfile.jsonFileWrite(bufferAllocator, "prof.json");

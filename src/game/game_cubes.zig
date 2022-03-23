@@ -9,6 +9,8 @@ const engine = @import("../engine.zig");
 const tools = @import("../tools.zig");
 const input = engine.input;
 
+pub const trace = @import("../tracy.zig").trace;
+
 const matfuncs = engine.render.material;
 
 var modelMat = engine.Mat44f.identity();
@@ -19,6 +21,9 @@ var projMat: engine.Mat44f = undefined;
 var meshAllocator = std.heap.page_allocator;
 var textureAllocator = std.heap.page_allocator;
 var meshMaterial: engine.render.Material = undefined;
+
+var render3d:bool = true;
+var renderSingleFrame:bool = false;
 
 pub fn init() !void {
     projMat = engine.Mat44f.createPerspective(50, @intToFloat(f32, engine.systemConfig.renderWidth) / @intToFloat(f32, engine.systemConfig.renderHeight), 0.1, 1000);
@@ -64,8 +69,12 @@ var cameraRot = engine.Mat44f.identity();
 
 var exposure_bias: f32 = 2.0;
 var font: engine.render.Font = undefined;
+var singleFrameKeyDown:bool = false;
 
 pub fn update() bool {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     if (input.isKeyDown(input.KeyCode.ESCAPE))
         return false;
 
@@ -110,7 +119,14 @@ pub fn update() bool {
 
     // var srenderDraw = engine.Sampler.begin(&engine.profiler,"draw.mesh");
     // defer srenderDraw.end();
+
+
+
+    if(!input.isKeyDown(input.KeyCode.SPACE))
     {
+        // if(renderSingleFrame)
+        //     render3d = false;
+
         // const renderStart = frameTimer.read();
         // renderTimer.reset();
         engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh, &meshMaterial);
