@@ -43,13 +43,24 @@ var bufferAllocator = std.heap.page_allocator;
 // };
 
 pub const systemConfig = sys.Config{
-  .windowWidth = 1920,
-  .windowHeight = 1080,
+  .windowWidth = 1260,
+  .windowHeight = 768,
   .renderWidth = 426,
   .renderHeight = 240,
   .maxFps = 60,
   .fullscreen = false,
 };
+
+
+// pub const systemConfig = sys.Config{
+//   .windowWidth = 1920,
+//   .windowHeight = 1080,
+//   .renderWidth = 1024,
+//   .renderHeight = 768,
+//   .maxFps = 60,
+//   .fullscreen = false,
+// };
+
 
 var profileId: u1 = 0;
 
