@@ -48,7 +48,8 @@ pub fn InPlaceQueue(comptime T: type) type {
         head: ?*T = null,
         tail: ?*T = null,
         //lock:std.Mutex,
-        lock: std.Thread.Mutex,
+        writeLock: std.Thread.Mutex.AtomicMutex,
+        readLock: std.Thread.Mutex.AtomicMutex,
         wait: std.Thread.Semaphore,
         size: usize,
 
@@ -56,7 +57,8 @@ pub fn InPlaceQueue(comptime T: type) type {
             var s = Self{
                 .head = null,
                 .tail = null,
-                .lock = std.Thread.Mutex{},
+                .writeLock = std.Thread.Mutex.AtomicMutex{},
+                .readLock = std.Thread.Mutex.AtomicMutex{},
                 .wait = undefined,
                 .size = 0,
             };
@@ -66,8 +68,11 @@ pub fn InPlaceQueue(comptime T: type) type {
 
         pub fn push(self: *Self, node: ?*T) void {
             //std.debug.warn("push: {}\n",.{std.Thread.getCurrentId()});
-            self.lock.lock();
-            defer self.lock.unlock();
+            self.writeLock.lock();
+            defer self.writeLock.unlock();
+
+            self.readLock.lock();
+            defer self.readLock.unlock();
 
             if (self.tail != null)
                 self.tail.?.next = node;
@@ -83,8 +88,8 @@ pub fn InPlaceQueue(comptime T: type) type {
         }
 
         pub fn pop(self: *Self) ?*T {
-            self.lock.lock();
-            defer self.lock.unlock();
+            self.readLock.lock();
+            defer self.readLock.unlock();
 
             var node = self.head orelse return null;
             self.head = self.head.?.next;

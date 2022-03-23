@@ -29,8 +29,15 @@ pub fn build(b: *Builder) void {
 
 
     if(builtin.os.tag == .windows) {
-        exe.addIncludeDir("external/SDL2-2.0.12/include");
-        exe.linkSystemLibrary("external/SDL2-2.0.12/lib/x64/SDL2");
+        var sdl_path = b.fmt("{s}/external/win/SDL2", .{b.build_root});
+        // std.debug.print("{s}", .{sdl_path});
+        exe.addLibPath(b.fmt("{s}/lib/x64", .{sdl_path}));
+        exe.addIncludeDir(b.fmt("{s}/include", .{sdl_path}));
+        exe.addIncludeDir("C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.17763.0\\shared\\evntprov.h");
+        b.installBinFile( b.fmt("{s}/lib/x64/SDL2.dll", .{sdl_path}), "SDL2.dll");
+        exe.linkSystemLibrary("sdl2");
+
+        
     } else {    
         exe.linkSystemLibrary("SDL2");
     }
