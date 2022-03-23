@@ -201,6 +201,105 @@ pub const Stats = struct {
     }
 };
 
+pub const MeshRenderData = struct {
+    model: *const Mat44f,
+    view: *const Mat44f,
+    proj: *const Mat44f,
+    mv: *const Mat44f,
+    mvp: *const Mat44f,
+    offset: u16,
+    mesh: *Mesh,
+    shader: *Material,
+};
+
+pub const TriRenderData = struct {
+    pub const Visible = 1 << 0;
+    pub const TooSmall = 1 << 1;
+
+    id:u32,
+
+    meshData:MeshRenderData,
+
+    // From Mesh
+    vi: [3]u16, // vertex indicies
+    rv: [3]Vec4f, // raw verticies (un-transformed)
+    vc: [3]Vec4f,
+    uv: [3]Vec4f,
+    vn: [3]Vec4f,
+
+    v: [3]Vec4f, // transformed and projected verticies
+
+    vp: Mat44f, // View * Projection
+    mv: [3]Vec4f, // Model * View
+
+    normal: Vec4f,
+    edges: [3]Vec4f,
+    screenArea: f32,
+    flags: u32,
+
+
+    
+
+    // Per-Pixel
+    x: f32,
+    y: f32,
+    p: Vec4f,
+    worldPixel: Vec4f,
+    pixelNormal: Vec4f,
+    fbc: Vec4f,
+
+    c: Color,
+};
+
+const TriSpanData = struct {
+    
+
+};
+
+pub fn RenderJob(comptime dataType:type, func:ExecuteFunc ) type {
+
+    return struct {
+        const Self = @This();
+        pub const ExecuteFunc = fn (self:*Self) void;
+        
+        func:ExecuteFunc,
+        job: Job,
+        complete:bool,
+
+        data: TriRenderData,
+
+        pub fn init(data:dataType) Self {
+            return Self{
+                .job = Job{
+                    .executeFn = execute,
+                    .abortFn = abort,
+                },
+
+                .data = data,
+                .complete = false,
+            };
+        }
+
+        fn execute(job: *Job) !Job.Result {
+            const self = job.implementor(Self, "job");
+
+            self.func(self);
+            self.complete = true;
+            //std.debug.warn("\t job: {}:{} execution!\n", .{self.id, self.complete});
+            return Job.Result.Complete;
+        }
+
+        fn abort(job: *Job) !void {
+            _ = job.implementor(Self, "job");
+            reset();
+        }
+
+        pub fn reset() void {
+            complete = false;
+        }
+
+    };
+}
 
 pub const MeshRenderJob = struct {
     job: Job,
@@ -253,18 +352,11 @@ pub const MeshRenderJob = struct {
 
 pub const TriRenderJob = struct {
     job: Job,
-    id: u8,
-    model: *const Mat44f,
-    view: *const Mat44f,
-    proj: *const Mat44f,
-    mv: *const Mat44f,
-    mvp: *const Mat44f,
-    offset: u16,
-    mesh: *Mesh,
-    shader: *Material,
     complete: bool,
 
-    pub fn init(ident: u8, model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh, shader: *Material) TriRenderJob {
+    data: TriRenderData,
+
+    pub fn init(data:TriRenderData) TriRenderJob {
         return TriRenderJob{
             .job = Job{
                 // .priority = 0,
@@ -273,15 +365,7 @@ pub const TriRenderJob = struct {
                 .abortFn = abort,
             },
 
-            .id = ident,
-            .model = model,
-            .view = view,
-            .proj = proj,
-            .mv = mv,
-            .mvp = mvp,
-            .offset = offset,
-            .mesh = mesh,
-            .shader = shader,
+            .data = data,
             .complete = false,
         };
     }
@@ -504,42 +588,6 @@ pub fn drawWorldLine(mvp: *const Mat44f, start: Vec4f, end: Vec4f, color: Vec4f,
         drawLine(@floatToInt(i32, spx.x), @floatToInt(i32, spx.y), @floatToInt(i32, epx.x), @floatToInt(i32, epx.y), c);
 }
 
-pub const TriRenderData = struct {
-    pub const Visible = 1 << 0;
-    pub const TooSmall = 1 << 1;
-
-    // From Mesh
-    vi: [3]u16, // vertex indicies
-    rv: [3]Vec4f, // raw verticies (un-transformed)
-    vc: [3]Vec4f,
-    uv: [3]Vec4f,
-    vn: [3]Vec4f,
-
-    v: [3]Vec4f, // transformed and projected verticies
-
-    vp: Mat44f, // View * Projection
-    mv: [3]Vec4f, // Model * View
-
-    normal: Vec4f,
-    edges: [3]Vec4f,
-    screenArea: f32,
-    flags: u32,
-
-    // Per-Pixel
-    x: f32,
-    y: f32,
-    p: Vec4f,
-    worldPixel: Vec4f,
-    pixelNormal: Vec4f,
-    fbc: Vec4f,
-
-    c: Color,
-};
-
-const TriData = struct {
-
-
-};
 /// Render triangle to frame buffer
 pub fn drawTri(d: *TriRenderJob) void {
     const tracy = trace(@src());
@@ -590,6 +638,8 @@ pub fn drawTri(d: *TriRenderJob) void {
 
     // var sp = profile.?.beginSample("render.mesh.draw.tri");
     // defer profile.?.endSample(sp);
+
+    
 
     const wv0 = d.model.mul_vec4(rv0);
     const wv1 = d.model.mul_vec4(rv1);
