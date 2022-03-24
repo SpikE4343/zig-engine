@@ -205,8 +205,8 @@ pub const MeshRenderData = struct {
     model: *const Mat44f,
     view: *const Mat44f,
     proj: *const Mat44f,
-    mv: *const Mat44f,
-    mvp: *const Mat44f,
+    mv: Mat44f,
+    mvp: Mat44f,
     offset: u16,
     mesh: *Mesh,
     shader: *Material,
@@ -216,9 +216,9 @@ pub const TriRenderData = struct {
     pub const Visible = 1 << 0;
     pub const TooSmall = 1 << 1;
 
-    id:u32,
+    id: u32,
 
-    meshData:MeshRenderData,
+    meshData: MeshRenderData,
 
     // From Mesh
     vi: [3]u16, // vertex indicies
@@ -237,9 +237,6 @@ pub const TriRenderData = struct {
     screenArea: f32,
     flags: u32,
 
-
-    
-
     // Per-Pixel
     x: f32,
     y: f32,
@@ -252,29 +249,28 @@ pub const TriRenderData = struct {
 };
 
 const TriSpanData = struct {
-    
-
+    triData: *TriRenderData,
 };
 
-pub fn RenderJob(comptime dataType:type, func:ExecuteFunc ) type {
-
+pub fn RenderJob(comptime TDataType: type, execFunc: fn (data: *TDataType) void) type {
+    const RenderExecuteFunc = @TypeOf(execFunc);
     return struct {
         const Self = @This();
-        pub const ExecuteFunc = fn (self:*Self) void;
-        
-        func:ExecuteFunc,
+
+        func: RenderExecuteFunc,
         job: Job,
-        complete:bool,
+        complete: bool,
 
-        data: TriRenderData,
+        data: TDataType,
 
-        pub fn init(data:dataType) Self {
+        pub fn init(data: TDataType) Self {
             return Self{
                 .job = Job{
                     .executeFn = execute,
                     .abortFn = abort,
                 },
 
+                .func = execFunc,
                 .data = data,
                 .complete = false,
             };
@@ -283,7 +279,7 @@ pub fn RenderJob(comptime dataType:type, func:ExecuteFunc ) type {
         fn execute(job: *Job) !Job.Result {
             const self = job.implementor(Self, "job");
 
-            self.func(self);
+            self.func(&self.data);
             self.complete = true;
             //std.debug.warn("\t job: {}:{} execution!\n", .{self.id, self.complete});
             return Job.Result.Complete;
@@ -291,148 +287,13 @@ pub fn RenderJob(comptime dataType:type, func:ExecuteFunc ) type {
 
         fn abort(job: *Job) !void {
             _ = job.implementor(Self, "job");
-            reset();
         }
-
-        pub fn reset() void {
-            complete = false;
-        }
-
     };
 }
 
-pub const MeshRenderJob = struct {
-    job: Job,
-    id: u8,
-    model: *const Mat44f,
-    view: *const Mat44f,
-    proj: *const Mat44f,
-    mv: *const Mat44f,
-    mvp: *const Mat44f,
-    offset: u16,
-    mesh: *Mesh,
-    shader: *Material,
-    complete: bool,
-
-    pub fn init(ident: u8, model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh, shader: *Material) MeshRenderJob {
-        return MeshRenderJob{
-            .job = Job{
-                // .priority = 0,
-                // .name = "testjob",
-                .executeFn = execute,
-                .abortFn = abort,
-            },
-
-            .id = ident,
-            .model = model,
-            .view = view,
-            .proj = proj,
-            .mv = mv,
-            .mvp = mvp,
-            .offset = offset,
-            .mesh = mesh,
-            .shader = shader,
-            .complete = false,
-        };
-    }
-
-    fn execute(job: *Job) !Job.Result {
-        const self = job.implementor(MeshRenderJob, "job");
-
-        drawMesh(self);
-        self.complete = true;
-        //std.debug.warn("\t job: {}:{} execution!\n", .{self.id, self.complete});
-        return Job.Result.Complete;
-    }
-
-    fn abort(job: *Job) !void {
-        _ = job.implementor(TriRenMeshRenderJobderJob, "job");
-    }
-};
-
-pub const TriRenderJob = struct {
-    job: Job,
-    complete: bool,
-
-    data: TriRenderData,
-
-    pub fn init(data:TriRenderData) TriRenderJob {
-        return TriRenderJob{
-
-            .job = Job{
-                // .priority = 0,
-                // .name = "testjob",
-                .executeFn = execute,
-                .abortFn = abort,
-            },
-
-            .data = data,
-            .complete = false,
-        };
-    }
-
-    fn execute(job: *Job) !Job.Result {
-        const self = job.implementor(TriRenderJob, "job");
-
-        drawTri(self);
-        self.complete = true;
-        //std.debug.warn("\t job: {}:{} execution!\n", .{self.id, self.complete});
-        return Job.Result.Complete;
-    }
-
-    fn abort(job: *Job) !void {
-        _ = job.implementor(TriRenderJob, "job");
-    }
-};
-
-pub const SpanRenderJob = struct {
-    job: Job,
-    id: u8,
-    model: *const Mat44f,
-    view: *const Mat44f,
-    proj: *const Mat44f,
-    mv: *const Mat44f,
-    mvp: *const Mat44f,
-    offset: u16,
-    mesh: *Mesh,
-    shader: *Material,
-    complete: bool,
-
-    pub fn init(ident: u8, model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh, shader: *Material) SpanRenderJob {
-        return SpanRenderJob{
-            .job = Job{
-                // .priority = 0,
-                // .name = "testjob",
-                .executeFn = execute,
-                .abortFn = abort,
-            },
-
-            .id = ident,
-            .model = model,
-            .view = view,
-            .proj = proj,
-            .mv = mv,
-            .mvp = mvp,
-            .offset = offset,
-            .mesh = mesh,
-            .shader = shader,
-            .complete = false,
-        };
-    }
-
-    fn execute(job: *Job) !Job.Result {
-        const self = job.implementor(SpanRenderJob, "job");
-
-        drawSpan(self);
-        self.complete = true;
-        //std.debug.warn("\t job: {}:{} execution!\n", .{self.id, self.complete});
-        return Job.Result.Complete;
-    }
-
-    fn abort(job: *Job) !void {
-        _ = job.implementor(SpanRenderJob, "job");
-    }
-};
+const MeshRenderJob = RenderJob(MeshRenderData, drawMeshJob);
+const TriRenderJob = RenderJob(TriRenderData, drawTriJob);
+const SpanRenderJob = RenderJob(TriSpanData, drawTriSpanJob);
 
 var meshJobs: std.ArrayList(MeshRenderJob) = undefined;
 var triJobs: std.ArrayList(TriRenderJob) = undefined;
@@ -465,27 +326,62 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
     depthBuffer = try PixelBuffer(f32).init(renderWidth, renderHeight, allocator);
     colorRenderer = PixelRenderer(Color).init(&colorBuffer);
 
-
     meshJobs = try std.ArrayList(MeshRenderJob).initCapacity(alloc.*, 1024);
-    try triData.resize(1024);
+    // try meshJobs.resize(1024);
 
-    triData = try std.ArrayList(TriRenderJob).initCapacity(alloc.*, 1024*4);
-    try triData.resize(1024*4);
+    triJobs = try std.ArrayList(TriRenderJob).initCapacity(alloc.*, 1024);
+    // try triJobs.resize(1024);
 
-    spanJobs = try std.ArrayList(SpanRenderJob).initCapacity(alloc.*, 1024*8);
-    try spanJobs.resize(1024*8);
+    spanJobs = try std.ArrayList(SpanRenderJob).initCapacity(alloc.*, 1024);
+    // try spanJobs.resize(1024);
 
-    renderWorkers = try jobs.WorkerPool.init(&renderQueue, alloc, std.Thread.getCpuCount());
+    renderWorkers = try jobs.WorkerPool.init(&renderQueue, alloc, @intCast(u8, try std.Thread.getCpuCount()));
     try renderWorkers.start();
 }
 
 pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, shader: *Material) void {
+    var job = meshJobs.addOne() catch unreachable;
+
+    job.data.mesh = mesh;
+    job.data.model = m;
+    job.data.view = v;
+    job.data.proj = p;
+    job.data.shader = shader;
+
+    // Model * View
+    var mv = m.*;
+    mv.mul(v.*);
+    job.data.mv = mv;
+
+    // Projection * Model * View
+    var mvp = p.*;
+    mvp.mul(v.*);
+    mvp.mul(m.*);
+    job.data.mvp = mvp;
+
+    renderQueue.push(&job.job);
+}
+
+fn drawMeshJob(meshJob:*MeshRenderData) void {
+    _=meshJob;
+}
+
+fn drawTriJob(triJob: *TriRenderData) void {
+    _=triJob;
+}
+
+fn drawTriSpanJob(spanJob: *TriSpanData) void {
+    _=spanJob;
+}
+
+pub fn drawMesh_old(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, shader: *Material) void {
     const tracy = trace(@src());
     defer tracy.end();
     var sp = profile.?.beginSample("render.mesh.draw");
     defer profile.?.endSample(sp);
 
     _ = @atomicRmw(u32, &stats.totalMeshes, .Add, 1, .SeqCst);
+    _=shader;
 
     var mv = m.*;
     mv.mul(v.*);
@@ -498,15 +394,15 @@ pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mes
     // const numTris = ids / 3;
 
     var t: u16 = 0;
-    while (t < ids) {
-        triJobs.items[t / 3] = TriRenderJob.init(@truncate(u8, t / 3), m, v, p, &mv, &mvp, t, mesh, shader);
+    // while (t < ids) {
+    //     triJobs.items[t / 3] = TriRenderJob.init(@truncate(u8, t / 3), m, v, p, &mv, &mvp, t, mesh, shader);
 
-        var data = &triJobs.items[t / 3];
-        data.complete = false;
-        renderQueue.push(&data.job) catch continue;
-        //drawTri(data);
-        t += 3;
-    }
+    //     var data = &triJobs.items[t / 3];
+    //     data.complete = false;
+    //     renderQueue.push(&data.job) catch continue;
+    //     //drawTri(data);
+    //     t += 3;
+    // }
 
     t = 0;
     while (t < ids) {
@@ -640,8 +536,6 @@ pub fn drawTri(d: *TriRenderJob) void {
     // var sp = profile.?.beginSample("render.mesh.draw.tri");
     // defer profile.?.endSample(sp);
 
-    
-
     const wv0 = d.model.mul_vec4(rv0);
     const wv1 = d.model.mul_vec4(rv1);
     const wv2 = d.model.mul_vec4(rv2);
@@ -768,6 +662,8 @@ pub fn drawTri(d: *TriRenderJob) void {
     // drawWorldLine(mvp, rv2, rv2.addDup(n2), Vec4f.init(0,0,1,1));
 }
 
+
+
 pub fn drawProgress(x: i16, y: i16, max_width: f32, value: f32, max_value: f32) void {
     const cs = std.math.clamp(value, 0.0, max_value) / max_value;
     // const cs2 = cs*cs;
@@ -787,14 +683,14 @@ pub fn writePixel(x: i32, y: i32, z: f32, c: Color) void {
 pub fn beginFrame(profiler: ?*Profile) *u8 {
     const tracy = trace(@src());
     defer tracy.end();
-    
+
     profile = profiler;
     var pprof = profile.?.beginSample("render.beginFrame");
     defer profile.?.endSample(pprof);
 
     stats.reset();
 
-    // colorBuffer.clear(Color.init(50, 50, 120, 255));
+    colorBuffer.clear(Color.init(50, 50, 120, 255));
     depthBuffer.clear(std.math.inf(f32));
 
     return &colorBuffer.bufferStart().color[0];
@@ -807,5 +703,7 @@ pub fn endFrame() void {
 pub fn shutdown() void {
     colorBuffer.deinit();
     depthBuffer.deinit();
-    triData.deinit();
+    meshJobs.deinit();
+    triJobs.deinit();
+    spanJobs.deinit();
 }
