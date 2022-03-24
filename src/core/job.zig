@@ -134,7 +134,7 @@ pub fn InPlaceQueue(comptime T: type) type {
     };
 }
 
-const JobQueue = InPlaceQueue(Job);
+pub const JobQueue = InPlaceQueue(Job);
 
 pub const Worker = struct {
     pending: *JobQueue,

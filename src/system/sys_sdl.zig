@@ -10,6 +10,8 @@ const c = @cImport({
 });
 const assert = @import("std").debug.assert;
 
+pub const trace = @import("../tracy.zig").trace;
+
 const SDL_WINDOWPOS_UNDEFINED = @bitCast(c_int, c.SDL_WINDOWPOS_UNDEFINED_MASK);
 
 const SDL_INIT_EVERYTHING =
@@ -116,6 +118,9 @@ pub fn shutdown() void {
 /// Start updating the system
 /// returns false when system quit message handled
 pub fn beginUpdate() bool {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     _ = common.beginUpdate();
 
     t0 = @intCast(u32, c.SDL_GetTicks());
