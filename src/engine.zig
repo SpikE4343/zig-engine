@@ -107,8 +107,8 @@ pub fn main() !void {
     // var renderSampler:Sampler = undefined;
 
     while (!quit) {
-        const tracy = trace(@src());
-        defer tracy.end();
+        // const tracy = trace(@src());
+        // defer tracy.end();
         {
             var el = Sampler.initAndBegin(profiler, "engine.main");
             defer el.end();

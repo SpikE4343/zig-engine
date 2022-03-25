@@ -202,12 +202,11 @@ pub const Stats = struct {
 };
 
 pub const MeshRenderData = struct {
-<<<<<<< HEAD
     model: *const Mat44f,
     view: *const Mat44f,
     proj: *const Mat44f,
-    mv: *const Mat44f,
-    mvp: *const Mat44f,
+    mv: Mat44f,
+    mvp: Mat44f,
     offset: u16,
     mesh: *Mesh,
     shader: *Material,
@@ -253,170 +252,6 @@ pub const TriRenderData = struct {
 };
 
 const TriSpanData = struct {
-    
-
-};
-
-pub fn RenderJob(comptime dataType:type, func:ExecuteFunc ) type {
-
-    return struct {
-        const Self = @This();
-        pub const ExecuteFunc = fn (self:*Self) void;
-        
-        func:ExecuteFunc,
-        job: Job,
-        complete:bool,
-
-        data: TriRenderData,
-
-        pub fn init(data:dataType) Self {
-            return Self{
-                .job = Job{
-                    .executeFn = execute,
-                    .abortFn = abort,
-                },
-
-                .data = data,
-                .complete = false,
-            };
-        }
-
-        fn execute(job: *Job) !Job.Result {
-            const self = job.implementor(Self, "job");
-
-            self.func(self);
-            self.complete = true;
-            //std.debug.warn("\t job: {}:{} execution!\n", .{self.id, self.complete});
-            return Job.Result.Complete;
-        }
-
-        fn abort(job: *Job) !void {
-            _ = job.implementor(Self, "job");
-            reset();
-        }
-
-        pub fn reset() void {
-            complete = false;
-        }
-
-    };
-}
-
-pub const MeshRenderJob = struct {
-    job: Job,
-    id: u8,
-=======
->>>>>>> fa82eaf83bb36997e9e46970f7818223012bff07
-    model: *const Mat44f,
-    view: *const Mat44f,
-    proj: *const Mat44f,
-    mv: Mat44f,
-    mvp: Mat44f,
-    offset: u16,
-    mesh: *Mesh,
-    shader: *Material,
-<<<<<<< HEAD
-    complete: bool,
-
-    pub fn init(ident: u8, model: *const Mat44f, view: *const Mat44f, proj: *const Mat44f, mv: *const Mat44f, mvp: *const Mat44f, offset: u16, mesh: *Mesh, shader: *Material) MeshRenderJob {
-        return MeshRenderJob{
-            .job = Job{
-                // .priority = 0,
-                // .name = "testjob",
-                .executeFn = execute,
-                .abortFn = abort,
-            },
-
-            .id = ident,
-            .model = model,
-            .view = view,
-            .proj = proj,
-            .mv = mv,
-            .mvp = mvp,
-            .offset = offset,
-            .mesh = mesh,
-            .shader = shader,
-            .complete = false,
-        };
-    }
-
-    fn execute(job: *Job) !Job.Result {
-        const self = job.implementor(MeshRenderJob, "job");
-
-        drawMesh(self);
-        self.complete = true;
-        //std.debug.warn("\t job: {}:{} execution!\n", .{self.id, self.complete});
-        return Job.Result.Complete;
-    }
-
-    fn abort(job: *Job) !void {
-        _ = job.implementor(TriRenMeshRenderJobderJob, "job");
-    }
-};
-
-pub const TriRenderJob = struct {
-    job: Job,
-    complete: bool,
-
-    data: TriRenderData,
-
-    pub fn init(data:TriRenderData) TriRenderJob {
-        return TriRenderJob{
-            .job = Job{
-                // .priority = 0,
-                // .name = "testjob",
-                .executeFn = execute,
-                .abortFn = abort,
-            },
-
-            .data = data,
-            .complete = false,
-        };
-    }
-
-    fn execute(job: *Job) !Job.Result {
-        const self = job.implementor(TriRenderJob, "job");
-=======
-};
-
-pub const TriRenderData = struct {
-    pub const Visible = 1 << 0;
-    pub const TooSmall = 1 << 1;
->>>>>>> fa82eaf83bb36997e9e46970f7818223012bff07
-
-    id: u32,
-
-    meshData: MeshRenderData,
-
-    // From Mesh
-    vi: [3]u16, // vertex indicies
-    rv: [3]Vec4f, // raw verticies (un-transformed)
-    vc: [3]Vec4f,
-    uv: [3]Vec4f,
-    vn: [3]Vec4f,
-
-    v: [3]Vec4f, // transformed and projected verticies
-
-    vp: Mat44f, // View * Projection
-    mv: [3]Vec4f, // Model * View
-
-    normal: Vec4f,
-    edges: [3]Vec4f,
-    screenArea: f32,
-    flags: u32,
-
-    // Per-Pixel
-    x: f32,
-    y: f32,
-    p: Vec4f,
-    worldPixel: Vec4f,
-    pixelNormal: Vec4f,
-    fbc: Vec4f,
-
-    c: Color,
-};
-
-const TriSpanData = struct {
     triData: *TriRenderData,
 };
 
@@ -424,36 +259,34 @@ pub fn RenderJob(comptime TDataType: type, execFunc: fn (data: *TDataType) void)
     const RenderExecuteFunc = @TypeOf(execFunc);
     return struct {
         const Self = @This();
+        const func:RenderExecuteFunc=execFunc;
 
-        func: RenderExecuteFunc,
         job: Job,
-        complete: bool,
-
+        complete: bool = false,
         data: TDataType,
 
-        pub fn init(data: TDataType) Self {
+        pub fn init() Self {
             return Self{
-                .job = Job{
+               .job = Job{
                     .executeFn = execute,
                     .abortFn = abort,
+                    .next = null,
                 },
-
-                .func = execFunc,
-                .data = data,
+                .data = undefined,
                 .complete = false,
             };
         }
 
-        fn execute(job: *Job) !Job.Result {
+        fn execute(job: *Job) Job.Error!Job.Result {
             const self = job.implementor(Self, "job");
 
-            self.func(&self.data);
+            Self.func(&self.data);
             self.complete = true;
             //std.debug.warn("\t job: {}:{} execution!\n", .{self.id, self.complete});
             return Job.Result.Complete;
         }
 
-        fn abort(job: *Job) !void {
+        fn abort(job: *Job) Job.Error!void {
             _ = job.implementor(Self, "job");
         }
     };
@@ -512,6 +345,8 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
 pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, shader: *Material) void {
     var job = meshJobs.addOne() catch unreachable;
 
+    job.* = MeshRenderJob.init();
+
     job.data.mesh = mesh;
     job.data.model = m;
     job.data.view = v;
@@ -545,8 +380,8 @@ fn drawTriSpanJob(spanJob: *TriSpanData) void {
 }
 
 pub fn drawMesh_old(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, shader: *Material) void {
-    const tracy = trace(@src());
-    defer tracy.end();
+    // const tracy = trace(@src());
+    // defer tracy.end();
     var sp = profile.?.beginSample("render.mesh.draw");
     defer profile.?.endSample(sp);
 
@@ -658,8 +493,8 @@ pub fn drawWorldLine(mvp: *const Mat44f, start: Vec4f, end: Vec4f, color: Vec4f,
 
 /// Render triangle to frame buffer
 pub fn drawTri(d: *TriRenderJob) void {
-    const tracy = trace(@src());
-    defer tracy.end();
+    // const tracy = trace(@src());
+    // defer tracy.end();
     _ = @atomicRmw(u32, &stats.totalTris, .Add, 1, .SeqCst);
 
     var vp = d.view.*;
@@ -854,8 +689,8 @@ pub fn writePixel(x: i32, y: i32, z: f32, c: Color) void {
 }
 
 pub fn beginFrame(profiler: ?*Profile) *u8 {
-    const tracy = trace(@src());
-    defer tracy.end();
+    // const tracy = trace(@src());
+    // defer tracy.end();
 
     profile = profiler;
     var pprof = profile.?.beginSample("render.beginFrame");

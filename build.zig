@@ -16,12 +16,12 @@ pub fn build(b: *Builder) void {
     exe.setBuildMode(std.builtin.Mode.Debug);
 
 
-    const tracyPath = "../../tracy";
+    // const tracyPath = "../../tracy";
 
-    const client_cpp = std.fs.path.join(
-        b.allocator,
-        &[_][]const u8{ tracyPath, "TracyClient.cpp" }
-    ) catch unreachable;
+    // const client_cpp = std.fs.path.join(
+    //     b.allocator,
+    //     &[_][]const u8{ tracyPath, "TracyClient.cpp" }
+    // ) catch unreachable;
 
     // exe.addIncludeDir(tracyPath);
     // exe.addCSourceFile(client_cpp, &[_][]const u8{"-DTRACY_ENABLE=1", "-DTRACY_NO_SYSTEM_TRACING=1", "-fno-sanitize=undefined"});

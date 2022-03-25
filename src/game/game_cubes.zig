@@ -72,8 +72,8 @@ var font: engine.render.Font = undefined;
 var singleFrameKeyDown:bool = false;
 
 pub fn update() bool {
-    const tracy = trace(@src());
-    defer tracy.end();
+    // const tracy = trace(@src());
+    // defer tracy.end();
 
     if (input.isKeyDown(input.KeyCode.ESCAPE))
         return false;

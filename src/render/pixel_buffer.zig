@@ -37,8 +37,8 @@ pub fn PixelBuffer(comptime PixelType: type) type {
         }
 
         pub fn clear(self: *SelfType, p: PixelType) void {
-            const tracy = trace(@src());
-            defer tracy.end();
+            // const tracy = trace(@src());
+            // defer tracy.end();
     
             std.mem.set(PixelType, self.*.buffer.items[0..], p);
         }

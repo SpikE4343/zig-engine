@@ -92,7 +92,14 @@ pub fn InPlaceQueue(comptime T: type) type {
             defer self.readLock.unlock();
 
             var node = self.head orelse return null;
-            self.head = self.head.?.next;
+            if(self.head == self.tail) {
+                self.head = null;
+                self.tail = null;
+            }
+            else {
+                self.head = self.head.?.next;
+            }
+
             node.next = null;
 
             self.size -= 1;
