@@ -112,7 +112,11 @@ pub fn update() bool {
 
     viewMat = trans;
 
-    //modelMat.mul33(engine.Mat44f.rotY(rot));
+    // var rotmat = engine.Mat44f.rotY(0.01 / 60.0);
+
+    // rotmat.mul(modelMat);
+
+    // modelMat = rotmat;
 
     _ = engine.sys.showMouseCursor(~input.getMouseRight());
     _ = engine.sys.setRelativeMouseMode(input.getMouseRight());

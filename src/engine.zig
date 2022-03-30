@@ -19,7 +19,8 @@ pub const blend = @import("core/interp.zig");
 
 pub const Mesh = @import("render/mesh.zig").Mesh;
 
-pub const trace = @import("tracy.zig").trace;
+pub const tracy = @import("tracy.zig");
+pub const trace = tracy.trace;
 
 pub var stdout = std.io.getStdOut();
 var bufferAllocator = std.heap.page_allocator;
@@ -107,8 +108,9 @@ pub fn main() !void {
     // var renderSampler:Sampler = undefined;
 
     while (!quit) {
-        // const tracy = trace(@src());
-        // defer tracy.end();
+        tracy.markFrame();
+        const mainTrace = trace(@src());
+        defer mainTrace.end();
         {
             var el = Sampler.initAndBegin(profiler, "engine.main");
             defer el.end();
@@ -127,7 +129,12 @@ pub fn main() !void {
                 if (!game.update())
                     break;
             }
-            render.endFrame();
+
+            {
+                var ef = Sampler.initAndBegin(profiler, "render.endframe");
+                defer ef.end();
+                render.endFrame();
+            }
 
             {
                 var srt = Sampler.initAndBegin(profiler, "engine.render.profile");
@@ -161,15 +168,15 @@ pub fn main() !void {
           lastProfile = profiler;
           profiler = swapProfile();
           
-          render.frameStats().print();
-
+        //   render.frameStats().print();
+            // try profiler.jsonPrint(stdout);
           profiler.nextFrame();
         }
     }
 
-    //try lastProfile.jsonFileWrite(bufferAllocator, "prof.json");
+    // try currentProfile().jsonFileWrite(bufferAllocator, "prof.json");
 
-    //bufferAllocator.deinit();
+    // bufferAllocator.reset();
 }
 
 pub fn displayProfileUi(self: *Profile, x: i32, y: i32, lineSize: i32, maxWidth: f32, maxDepth: u8, targetNs: f32) void {

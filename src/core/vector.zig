@@ -90,9 +90,21 @@ pub const Vec4f = struct {
         self.w *= scalar;
     }
 
+    pub inline fn scale3(self: *Vec4f, scalar: f32) void {
+        self.x *= scalar;
+        self.y *= scalar;
+        self.z *= scalar;
+    }
+
     pub inline fn scaleDup(self: Vec4f, scalar: f32) Vec4f {
         var out = self;
         out.scale(scalar);
+        return out;
+    }
+
+    pub inline fn scale3Dup(self: Vec4f, scalar: f32) Vec4f {
+        var out = self;
+        out.scale3(scalar);
         return out;
     }
 

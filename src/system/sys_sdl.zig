@@ -118,8 +118,8 @@ pub fn shutdown() void {
 /// Start updating the system
 /// returns false when system quit message handled
 pub fn beginUpdate() bool {
-    // const tracy = trace(@src());
-    // defer tracy.end();
+    const tracy = trace(@src());
+    defer tracy.end();
 
     _ = common.beginUpdate();
 

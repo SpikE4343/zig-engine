@@ -20,13 +20,16 @@ const PixelRenderer = pixelbuffer.PixelRenderer;
 
 const jobs = @import("../core/job.zig");
 const Job = jobs.Job;
-const JobWorker = jobs.JobWorker;
-const JobQueue = jobs.JobQueue;
+const JobWorker = jobs.Worker;
+const JobQueue = jobs.Queue;
+const JobRunner = jobs.Runner;
+const JobPool = jobs.Pool;
 
 pub const material = @import("material.zig");
 pub const Material = material.Material;
 
-const trace = @import("../tracy.zig").trace;
+const tracy = @import("../tracy.zig");
+const trace = tracy.trace;
 
 /// RGBA 32 bit color value
 pub const Color = struct {
@@ -73,6 +76,10 @@ pub const Color = struct {
 
     pub fn fromNormal(cr: f32, cg: f32, cb: f32, ca: f32) Color {
         return Color.init(@floatToInt(u8, cr * 255), @floatToInt(u8, cg * 255), @floatToInt(u8, cb * 255), @floatToInt(u8, ca * 255));
+    }
+
+    pub fn fromNormalVec4f(vec:Vec4f) Color {
+        return Color.fromNormal( vec.x, vec.y, vec.z, vec.w);
     }
 };
 
@@ -156,36 +163,55 @@ var allocator: *std.mem.Allocator = undefined;
 var colorRenderer: PixelRenderer(Color) = undefined;
 
 pub const Stats = struct {
-    totalMeshes: u32,
-    totalTris: u32,
-    totalPixels: u32,
+    const Self = @This();
+    
 
-    renderedMeshes: u32,
-    renderedTris: u32,
-    renderedPixels: u32,
+    totalMeshes: u32=0,
+    totalTris: u32=0,
+    totalPixels: u32=0,
 
-    pub fn init() Stats {
-        return Stats{
+    renderedMeshes: u32=0,
+    renderedTris: u32=0,
+    renderedPixels: u32=0,
+
+    trisTooSmall:u32=0,
+    trisTooNear:u32=0,
+    trisBackfacing:u32=0,
+    jobWaitCount:u32=0,
+    jobCount:u32=0,
+
+    pub fn init() Self {
+        return Self {
             .totalMeshes = 0,
             .totalTris = 0,
             .totalPixels = 0,
             .renderedMeshes = 0,
             .renderedTris = 0,
             .renderedPixels = 0,
+            .trisTooSmall = 0,
+            .trisTooNear = 0,
+            .trisBackfacing = 0,
+            .jobWaitCount = 0,
+            .jobCount=0,
         };
     }
 
-    pub fn reset(self: *Stats) void {
-        self.totalMeshes = 0;
-        self.totalTris = 0;
-        self.totalPixels = 0;
-        self.renderedMeshes = 0;
-        self.renderedTris = 0;
-        self.renderedPixels = 0;
+    pub fn reset(self: *Self) void {
+        const ti = @typeInfo(Self);
+        inline for (ti.Struct.fields) |field| {
+            @field(self, field.name) = field.default_value orelse 0;
+        } 
     }
 
-    pub fn print(self: *Stats) void {
-        std.debug.print(" [ m({}, {}|{d:.2}%), t({}, {}|{d:.2}%), p({}, {}|{d:.2}%) ]\n", .{
+    pub fn trace(self:Stats) void {
+        const ti = @typeInfo(Stats);
+        inline for (ti.Struct.fields) |field| {
+            tracy.plotValue(field.name.ptr, @field(self, field.name));
+        }     
+    }
+
+    pub fn print(self: *Self) void {
+        std.debug.print(" [ m({}, {}|{d:.2}%), t({}, {}|{d:.2}%, <{d}, |<{d}, bf{d}), p({}, {}|{d:.2}%) ]\n", .{
             self.renderedMeshes,
             self.totalMeshes,
             @intToFloat(f32, self.renderedMeshes) / @intToFloat(f32, self.totalMeshes) * 100.0,
@@ -193,6 +219,9 @@ pub const Stats = struct {
             self.renderedTris,
             self.totalTris,
             @intToFloat(f32, self.renderedTris) / @intToFloat(f32, self.totalTris) * 100.0,
+            self.trisTooSmall,
+            self.trisTooNear,
+            self.trisBackfacing,
 
             self.renderedPixels,
             self.totalPixels,
@@ -291,11 +320,11 @@ const TriRenderJob  = RenderJob(TriRenderData,  drawTriJob);
 const SpanRenderJob = RenderJob(TriSpanData,    drawTriSpanJob);
 
 
-var meshJobs: std.ArrayList(MeshRenderJob) = undefined;
-var triJobs: std.ArrayList(TriRenderJob) = undefined;
-var spanJobs: std.ArrayList(SpanRenderJob) = undefined;
+var meshJobs: JobPool(MeshRenderJob) = undefined;
+var triJobs: JobPool(TriRenderJob) = undefined;
+var spanJobs: JobPool(SpanRenderJob) = undefined;
 
-var renderQueue = JobQueue.init();
+var renderQueue = JobRunner.init();
 var renderWorkers: jobs.WorkerPool = undefined;
 var stats = Stats.init();
 var viewport = Vec4f.zero();
@@ -306,6 +335,8 @@ pub fn frameStats() Stats {
 }
 
 pub fn drawLine(xFrom: i32, yFrom: i32, xTo: i32, yTo: i32, color: Color) void {
+    const zone = trace(@src());
+    defer zone.end();
     colorRenderer.drawLine(xFrom, yFrom, xTo, yTo, color);
 }
 
@@ -332,17 +363,20 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
     renderBounds = Bounds.init(Vec4f.zero(), viewport);
     viewport = Vec4f.init(@intToFloat(f32, colorBuffer.w), @intToFloat(f32, colorBuffer.h), 0, 0);
 
-    meshJobs = try std.ArrayList(MeshRenderJob).initCapacity(alloc.*, 1024);
-    triJobs = try std.ArrayList(TriRenderJob).initCapacity(alloc.*, 1024);
-    spanJobs = try std.ArrayList(SpanRenderJob).initCapacity(alloc.*, 1024);
+    meshJobs = try JobPool(MeshRenderJob).init(alloc.*, 16);
+    triJobs = try JobPool(TriRenderJob).init(alloc.*, 4 * 1024);
+    spanJobs = try JobPool(SpanRenderJob).init(alloc.*, 1024);
 
-    renderWorkers = try jobs.WorkerPool.init(&renderQueue, alloc, @intCast(u8, try std.Thread.getCpuCount()));
+    renderWorkers = try jobs.WorkerPool.init(&renderQueue, alloc, @intCast(u8, try std.Thread.getCpuCount()) >> 1);
     try renderWorkers.start();
 
 }
 
 pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mesh, shader: *Material) void {
-    var job = meshJobs.addOne() catch unreachable;
+    const zone = trace(@src());
+    defer zone.end();
+
+    var job = meshJobs.getItem();
 
     job.* = MeshRenderJob.init();
 
@@ -367,23 +401,33 @@ pub fn drawMesh(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: *Mes
     mvp.mul(m.*);
     job.data.mvp = mvp;
 
-    renderQueue.push(&job.job);
+    renderQueue.pending.push(&job.job);
 }
 
 fn drawMeshJob(meshJob:*MeshRenderData) void {
+    const zone = trace(@src());
+    defer zone.end();
+
     var t: u16 = 0;
     const ids = meshJob.mesh.indexBuffer.len;
 
-    while (t < ids/3) {
+    _ = @atomicRmw(u32, &stats.totalMeshes, .Add, 1, .SeqCst);
 
-        var job = triJobs.addOne() catch unreachable;
-        job.data.id = @truncate(u8, t);
-        job.data.offset = t;
+    while (t < ids/3) {
+        const zone1 = trace(@src());
+        defer zone1.end();
+
+        var job = triJobs.getItem();
+        job.* = TriRenderJob.init();
+        job.data.id = @truncate(u16, t);
+        job.data.offset = t*3;
         job.data.meshData = meshJob.*;
         job.complete = false;
-        renderQueue.push(job) catch continue;
+        renderQueue.pending.push(&job.job);
         t+=1;
     }
+
+    _ = @atomicRmw(u32, &stats.renderedMeshes, .Add, 1, .SeqCst);
 }
 
 fn getTriangleNormal(points:[3]Vec4f) Vec4f {
@@ -393,28 +437,33 @@ fn getTriangleNormal(points:[3]Vec4f) Vec4f {
     e0.sub(points[0]);
     e1.sub(points[0]);
 
-    return e0.cross3(e1).normalize3();
+    return e0.cross3(e1).normalized3();
 }
 
 fn drawTriJob(triJob: *TriRenderData) void {
+    const zone = trace(@src());
+    defer zone.end();
+
     var tri=triJob;
     const data = tri.meshData;
-    const mesh = meshData.mesh;
-    const shader = meshData.shader;
-    var sortedByY:[3]u8 = .{};
+    const mesh = data.mesh;
+    const shader = data.shader;
+    // var sortedByY:[3]u8 = .{};
 
-    var p = 0;
+    _ = @atomicRmw(u32, &stats.totalTris, .Add, 1, .SeqCst);
+
+    comptime var p = 0;
     inline while(p < 3)
     {
-        const offset = tri.offset + p;
-
+        var offset = tri.offset + p;
+        assert(offset < mesh.indexBuffer.len);
         tri.indicies[p] = mesh.indexBuffer[offset];
         tri.rawVertex[p] = mesh.vertexBuffer[tri.indicies[p]];
         
         tri.cameraVertex[p] = data.mv.mul33_vec4(tri.rawVertex[p]);
         tri.screenVertex[p] = shader.projectionShader(
             data.proj, 
-            shader.vertexShader(data.mv, offset, tri.rawVertex[p], shader), 
+            shader.vertexShader(&data.mv, offset, tri.rawVertex[p], shader), 
             viewport, 
             shader
             );
@@ -422,114 +471,82 @@ fn drawTriJob(triJob: *TriRenderData) void {
         tri.normals[p] = mesh.vertexNormalBuffer[mesh.indexNormalBuffer[offset]];
         tri.worldNormals[p] = data.model.mul33_vec4(tri.normals[p]);
         tri.uv[p] = Vec4f.init(
-            mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(offset)] * 2 + 0], 
+            mesh.textureCoordBuffer[mesh.indexUVBuffer[(offset)] * 2 + 0], 
             mesh.textureCoordBuffer[mesh.indexUVBuffer[(offset)] * 2 + 1], 
             0, 0);
 
         tri.worldVertex[p] = data.model.mul_vec4(tri.rawVertex[p]);
 
+        const indexScalar = @intToFloat(f32, offset) / @intToFloat(f32, mesh.indexBuffer.len);
+        tri.color[p] = Vec4f.init(0.4, 0.7, 0.5, 1.0).scale3Dup(indexScalar);//mesh.colorBuffer[tri.indicies[p]];
+
         p+=1;
     }
     
     tri.normal = getTriangleNormal(tri.cameraVertex);
-    tri.backfacing = tri.modelViewTransformedVertex[0].normalized3().dot3(tri.normal);
-
+    tri.backfacing = tri.cameraVertex[0].normalized3().dot3(tri.normal) > 0.0000000000001;
     tri.screenArea = Vec4f.triArea(tri.screenVertex[0], tri.screenVertex[1], tri.screenVertex[2]);
-
     tri.screenBounds = Bounds.init(tri.screenVertex[0], tri.screenVertex[0]);
 
+    if(tri.backfacing)
+    {
+        _ = @atomicRmw(u32, &stats.trisBackfacing, .Add, 1, .SeqCst);
+        return;
+    }
 
     p=0;
-    while(p < 3)
+    inline while(p < 3)
     {
-        
         tri.screenBounds.add(tri.screenVertex[p]);
         p+=1;
     }
+
+    tri.screenBounds.limit(renderBounds);
+    tri.screenBounds.topLeftHandLimit();
     
-
-    _ = @atomicRmw(u32, &stats.totalTris, .Add, 1, .SeqCst);
-
-    var vp = d.view.*;
-    vp.mul(d.proj.*);
-
-    d.vi = .{d.mesh.indexBuffer[d.offset + 0], d.mesh.indexBuffer[d.offset + 1], d.mesh.indexBuffer[d.offset + 2]};
-    d.rv = .{d.mesh.vertexBuffer[d.vi[0]], d.mesh.vertexBuffer[d.vi[1]], d.mesh.vertexBuffer[d.vi[2]]};
-    d.vmv = .{d.mv.mul33_vec4(d.rv[0]), d.mv.mul33_vec4(d.rv[1]), d.mv.mul33_vec4(d.rv[2])};
-
-    var e0 = d.vmv[1];
-    var e1 = d.vmv[2];
-
-    e0.sub(d.vmv[0]); // cull back facing triangles
-    e1.sub(d.vmv[0]);
-
-    const triNormal = e0.cross3(e1).normalized3();
-
-    const bfc = d.vmv[0].normalized3().dot3(triNormal);
-    if (bfc > 0.0000000000001)
-        return;
-
     
-
-    
-    d.v = .{ 
-        d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 0, rv0, d.shader), viewport, d.shader),
-        d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 1, rv1, d.shader), viewport, d.shader),
-        d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 2, rv2, d.shader), viewport, d.shader)
-    };
-
     // Too small to see
-    const area = Vec4f.triArea(v[0], v[1], v[2]);
-    if (area <= 0)
+    if (tri.screenArea <= 0)
+    {
+        _ = @atomicRmw(u32, &stats.trisTooSmall, .Add, 1, .SeqCst);
         return;
+    }
 
-    // near plane clipping
-    if (v[0].z <= 0.1 or v[1].z <= 0.1 or v[2].z <= 0.1)
-        return;
-
-    // var sp = profile.?.beginSample("render.mesh.draw.tri");
-    // defer profile.?.endSample(sp);
-
-    math.max(math.max(v[0].y, v[1].y), v[2].y);
+    for( tri.screenVertex ) |v| {
+        if( v.z <= 0.1)
+        {
+            _ = @atomicRmw(u32, &stats.trisTooNear, .Add, 1, .SeqCst); 
+            return;
+        }
+    }
 
     
-    d.rv = .{d.mesh.vertexBuffer[d.vi[0]], d.mesh.vertexBuffer[d.vi[1]], d.mesh.vertexBuffer[d.vi[2]]};
-    const wv:[3]Vec4f = .{d.model.mul_vec4(rv[0]), d.model.mul_vec4(rv[1]), d.model.mul_vec4(rv[2])};
+    
+    drawLine(
+        @floatToInt(i32, tri.screenVertex[0].x), 
+        @floatToInt(i32, tri.screenVertex[0].y), 
+        @floatToInt(i32, tri.screenVertex[1].x), 
+        @floatToInt(i32, tri.screenVertex[1].y), Color.fromNormalVec4f(tri.color[0]));
 
-    const wv0 = d.model.mul_vec4(rv0);
-    const wv1 = d.model.mul_vec4(rv1);
-    const wv2 = d.model.mul_vec4(rv2);
 
-    const c0 = Vec4f.zero(); //rv0.scaleDup(0.5);//Vec4f.init(rv0.x,0,0,1); // mesh.vertexNormalBuffer[vi0];
-    const c1 = Vec4f.zero(); //rv1.scaleDup(0.5);//Vec4f.init(0,rv0.y,0,1); // mesh.vertexNormalBuffer[vi1];//mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
-    const c2 = Vec4f.zero(); //rv2.scaleDup(0.5);//Vec4f.init(0,0,rv0.z,1); // mesh.vertexNormalBuffer[vi2];//mesh.colorBuffer[mesh.indexBuffer[offset + 2]];
+    drawLine(
+        @floatToInt(i32, tri.screenVertex[1].x), 
+        @floatToInt(i32, tri.screenVertex[1].y), 
+        @floatToInt(i32, tri.screenVertex[2].x), 
+        @floatToInt(i32, tri.screenVertex[2].y), Color.fromNormalVec4f(tri.color[1]));
 
-    var we0 = wv1;
-    var we1 = wv2;
 
-    we0.sub(wv0);
-    we1.sub(wv0);
+    drawLine(
+        @floatToInt(i32, tri.screenVertex[2].x), 
+        @floatToInt(i32, tri.screenVertex[2].y), 
+        @floatToInt(i32, tri.screenVertex[0].x), 
+        @floatToInt(i32, tri.screenVertex[0].y), Color.fromNormalVec4f(tri.color[2]));
 
-    const n0 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 0]];
-    const n1 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 1]];
-    const n2 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 2]];
 
-    const uv0 = Vec4f.init(d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 0)] * 2 + 0], d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 0)] * 2 + 1], 0, 0);
-    const uv1 = Vec4f.init(d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 1)] * 2 + 0], d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 1)] * 2 + 1], 0, 0);
-    const uv2 = Vec4f.init(d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 2)] * 2 + 0], d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 2)] * 2 + 1], 0, 0);
+    // math.max(math.max(v[0].y, v[1].y), v[2].y);
 
-    const wn0 = d.model.mul33_vec4(n0);
-    const wn1 = d.model.mul33_vec4(n1);
-    const wn2 = d.model.mul33_vec4(n2);
-
-    const renderBounds = Bounds.init(Vec4f.zero(), viewport);
-
-    var bounds = Bounds.init(v0, v0);
-    bounds.add(v0);
-    bounds.add(v1);
-    bounds.add(v2);
-    bounds.limit(renderBounds);
-    bounds.topLeftHandLimit();
+    _ = @atomicRmw(u32, &stats.renderedTris, .Add, 1, .SeqCst);
+    
 }
 
 fn drawTriSpanJob(spanJob: *TriSpanData) void {
@@ -548,9 +565,9 @@ pub fn drawMesh_old(m: *const Mat44f, v: *const Mat44f, p: *const Mat44f, mesh: 
     var mv = m.*;
     mv.mul(v.*);
 
-    var mvp = p.*;
-    mvp.mul(v.*);
-    mvp.mul(m.*);
+    var mvp = mv.*;
+    mvp.mul(p.*);
+    // mvp.mul(m.*);
 
     const ids = mesh.indexBuffer.len;
     // const numTris = ids / 3;
@@ -597,6 +614,8 @@ pub fn drawPointMesh(mvp: *const Mat44f, mesh: *Mesh, shader: *Material) void {
 }
 
 pub fn drawString(font: *Font, str: []const u8, x: i32, y: i32, color: Vec4f) void {
+    const zone = trace(@src());
+    defer zone.end();
     const colorValue = Color.init(@floatToInt(u8, color.x * 255), @floatToInt(u8, color.y * 255), @floatToInt(u8, color.z * 255), @floatToInt(u8, color.w * 255));
 
     _ = colorValue;
@@ -649,183 +668,183 @@ pub fn drawWorldLine(mvp: *const Mat44f, start: Vec4f, end: Vec4f, color: Vec4f,
 }
 
 /// Render triangle to frame buffer
-pub fn drawTri(d: *TriRenderJob) void {
-    // const tracy = trace(@src());
-    // defer tracy.end();
-    _ = @atomicRmw(u32, &stats.totalTris, .Add, 1, .SeqCst);
+// pub fn drawTri(d: *TriRenderJob) void {
+//     // const tracy = trace(@src());
+//     // defer tracy.end();
+//     _ = @atomicRmw(u32, &stats.totalTris, .Add, 1, .SeqCst);
 
-    var vp = d.view.*;
-    vp.mul(d.proj.*);
+//     var vp = d.view.*;
+//     vp.mul(d.proj.*);
 
-    const vi0 = d.mesh.indexBuffer[d.offset + 0];
-    const vi1 = d.mesh.indexBuffer[d.offset + 1];
-    const vi2 = d.mesh.indexBuffer[d.offset + 2];
+//     const vi0 = d.mesh.indexBuffer[d.offset + 0];
+//     const vi1 = d.mesh.indexBuffer[d.offset + 1];
+//     const vi2 = d.mesh.indexBuffer[d.offset + 2];
 
-    const rv0 = d.mesh.vertexBuffer[vi0];
-    const rv1 = d.mesh.vertexBuffer[vi1];
-    const rv2 = d.mesh.vertexBuffer[vi2];
+//     const rv0 = d.mesh.vertexBuffer[vi0];
+//     const rv1 = d.mesh.vertexBuffer[vi1];
+//     const rv2 = d.mesh.vertexBuffer[vi2];
 
-    // cull back facing triangles
-    const mv0 = d.mv.mul33_vec4(rv0);
-    const mv1 = d.mv.mul33_vec4(rv1);
-    const mv2 = d.mv.mul33_vec4(rv2);
+//     // cull back facing triangles
+//     const mv0 = d.mv.mul33_vec4(rv0);
+//     const mv1 = d.mv.mul33_vec4(rv1);
+//     const mv2 = d.mv.mul33_vec4(rv2);
 
-    var e0 = mv1;
-    var e1 = mv2;
+//     var e0 = mv1;
+//     var e1 = mv2;
 
-    e0.sub(mv0); // cull back facing triangles
-    e1.sub(mv0);
+//     e0.sub(mv0); // cull back facing triangles
+//     e1.sub(mv0);
 
-    const triNormal = e0.cross3(e1).normalized3();
+//     const triNormal = e0.cross3(e1).normalized3();
 
-    const bfc = mv0.normalized3().dot3(triNormal);
-    if (bfc > 0.0000000000001)
-        return;
+//     const bfc = mv0.normalized3().dot3(triNormal);
+//     if (bfc > 0.0000000000001)
+//         return;
 
-    const viewport = Vec4f.init(@intToFloat(f32, colorBuffer.w), @intToFloat(f32, colorBuffer.h), 0, 0);
+//     // const viewport = Vec4f.init(@intToFloat(f32, colorBuffer.w), @intToFloat(f32, colorBuffer.h), 0, 0);
 
-    const v0 = d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 0, rv0, d.shader), viewport, d.shader);
-    const v1 = d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 1, rv1, d.shader), viewport, d.shader);
-    const v2 = d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 2, rv2, d.shader), viewport, d.shader);
+//     const v0 = d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 0, rv0, d.shader), viewport, d.shader);
+//     const v1 = d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 1, rv1, d.shader), viewport, d.shader);
+//     const v2 = d.shader.projectionShader(d.proj, d.shader.vertexShader(d.mv, d.offset + 2, rv2, d.shader), viewport, d.shader);
 
-    const area = Vec4f.triArea(v0, v1, v2);
+//     const area = Vec4f.triArea(v0, v1, v2);
 
-    if (area <= 0)
-        return;
+//     if (area <= 0)
+//         return;
 
-    if (v0.z <= 0.1 or v1.z <= 0.1 or v2.z <= 0.1)
-        return;
+//     if (v0.z <= 0.1 or v1.z <= 0.1 or v2.z <= 0.1)
+//         return;
 
-    // var sp = profile.?.beginSample("render.mesh.draw.tri");
-    // defer profile.?.endSample(sp);
+//     // var sp = profile.?.beginSample("render.mesh.draw.tri");
+//     // defer profile.?.endSample(sp);
 
     
 
-    const wv0 = d.model.mul_vec4(rv0);
-    const wv1 = d.model.mul_vec4(rv1);
-    const wv2 = d.model.mul_vec4(rv2);
+//     const wv0 = d.model.mul_vec4(rv0);
+//     const wv1 = d.model.mul_vec4(rv1);
+//     const wv2 = d.model.mul_vec4(rv2);
 
-    const c0 = Vec4f.zero(); //rv0.scaleDup(0.5);//Vec4f.init(rv0.x,0,0,1); // mesh.vertexNormalBuffer[vi0];
-    const c1 = Vec4f.zero(); //rv1.scaleDup(0.5);//Vec4f.init(0,rv0.y,0,1); // mesh.vertexNormalBuffer[vi1];//mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
-    const c2 = Vec4f.zero(); //rv2.scaleDup(0.5);//Vec4f.init(0,0,rv0.z,1); // mesh.vertexNormalBuffer[vi2];//mesh.colorBuffer[mesh.indexBuffer[offset + 2]];
+//     const c0 = Vec4f.zero(); //rv0.scaleDup(0.5);//Vec4f.init(rv0.x,0,0,1); // mesh.vertexNormalBuffer[vi0];
+//     const c1 = Vec4f.zero(); //rv1.scaleDup(0.5);//Vec4f.init(0,rv0.y,0,1); // mesh.vertexNormalBuffer[vi1];//mesh.colorBuffer[mesh.indexBuffer[offset + 1]];
+//     const c2 = Vec4f.zero(); //rv2.scaleDup(0.5);//Vec4f.init(0,0,rv0.z,1); // mesh.vertexNormalBuffer[vi2];//mesh.colorBuffer[mesh.indexBuffer[offset + 2]];
 
-    var we0 = wv1;
-    var we1 = wv2;
+//     var we0 = wv1;
+//     var we1 = wv2;
 
-    we0.sub(wv0);
-    we1.sub(wv0);
+//     we0.sub(wv0);
+//     we1.sub(wv0);
 
-    const n0 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 0]];
-    const n1 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 1]];
-    const n2 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 2]];
+//     const n0 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 0]];
+//     const n1 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 1]];
+//     const n2 = d.mesh.vertexNormalBuffer[d.mesh.indexNormalBuffer[d.offset + 2]];
 
-    const uv0 = Vec4f.init(d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 0)] * 2 + 0], d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 0)] * 2 + 1], 0, 0);
-    const uv1 = Vec4f.init(d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 1)] * 2 + 0], d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 1)] * 2 + 1], 0, 0);
-    const uv2 = Vec4f.init(d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 2)] * 2 + 0], d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 2)] * 2 + 1], 0, 0);
+//     const uv0 = Vec4f.init(d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 0)] * 2 + 0], d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 0)] * 2 + 1], 0, 0);
+//     const uv1 = Vec4f.init(d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 1)] * 2 + 0], d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 1)] * 2 + 1], 0, 0);
+//     const uv2 = Vec4f.init(d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 2)] * 2 + 0], d.mesh.textureCoordBuffer[d.mesh.indexUVBuffer[(d.offset + 2)] * 2 + 1], 0, 0);
 
-    const wn0 = d.model.mul33_vec4(n0);
-    const wn1 = d.model.mul33_vec4(n1);
-    const wn2 = d.model.mul33_vec4(n2);
+//     const wn0 = d.model.mul33_vec4(n0);
+//     const wn1 = d.model.mul33_vec4(n1);
+//     const wn2 = d.model.mul33_vec4(n2);
 
-    const renderBounds = Bounds.init(Vec4f.zero(), viewport);
+//     const renderBounds = Bounds.init(Vec4f.zero(), viewport);
 
-    var bounds = Bounds.init(v0, v0);
-    bounds.add(v0);
-    bounds.add(v1);
-    bounds.add(v2);
-    bounds.limit(renderBounds);
-    bounds.topLeftHandLimit();
+//     var bounds = Bounds.init(v0, v0);
+//     bounds.add(v0);
+//     bounds.add(v1);
+//     bounds.add(v2);
+//     bounds.limit(renderBounds);
+//     bounds.topLeftHandLimit();
 
-    // var subsamples: u16 =1;
-    // var stepDist: f32 = 1.0 / @intToFloat(f32, math.max(2, subsamples));
+//     // var subsamples: u16 =1;
+//     // var stepDist: f32 = 1.0 / @intToFloat(f32, math.max(2, subsamples));
 
-    // iterate triangle bounding box drawing all pixels inside the triangle
-    // TODO: iterate tri edge vertically rendering scan lines to the opposite edge
-    var y = bounds.min.y;
-    var p: Vec4f = Vec4f.init(0, 0, 0, 0);
-    var pixelNormal: Vec4f = Vec4f.init(0, 0, 0, 0);
-    var fbc: Vec4f = Vec4f.init(0, 0, 0, 1);
-    var uv: Vec4f = Vec4f.init(0, 0, 0, 1);
-    var c: Color = Color.black();
+//     // iterate triangle bounding box drawing all pixels inside the triangle
+//     // TODO: iterate tri edge vertically rendering scan lines to the opposite edge
+//     var y = bounds.min.y;
+//     var p: Vec4f = Vec4f.init(0, 0, 0, 0);
+//     var pixelNormal: Vec4f = Vec4f.init(0, 0, 0, 0);
+//     var fbc: Vec4f = Vec4f.init(0, 0, 0, 1);
+//     var uv: Vec4f = Vec4f.init(0, 0, 0, 1);
+//     var c: Color = Color.black();
 
-    _ = @atomicRmw(u32, &stats.renderedTris, .Add, 1, .SeqCst);
+//     _ = @atomicRmw(u32, &stats.renderedTris, .Add, 1, .SeqCst);
 
-    // Generate spans
-    while (y <= bounds.max.y) {
-        var x = bounds.min.x;
-        defer y += 1;
+//     // Generate spans
+//     while (y <= bounds.max.y) {
+//         var x = bounds.min.x;
+//         defer y += 1;
 
-        while (x <= bounds.max.x) {
-            // const pixtracy = trace(@src());
-            // defer pixtracy.end();
-            // var pprof = profile.?.beginSample("render.mesh.draw.tri.pixel");
-            // defer profile.?.endSample(pprof);
-            _ = @atomicRmw(u32, &stats.totalPixels, .Add, 1, .SeqCst);
+//         while (x <= bounds.max.x) {
+//             // const pixtracy = trace(@src());
+//             // defer pixtracy.end();
+//             // var pprof = profile.?.beginSample("render.mesh.draw.tri.pixel");
+//             // defer profile.?.endSample(pprof);
+//             _ = @atomicRmw(u32, &stats.totalPixels, .Add, 1, .SeqCst);
 
-            defer x += 1;
+//             defer x += 1;
 
-            p.x = x;
-            p.y = y;
+//             p.x = x;
+//             p.y = y;
 
-            var tri = Vec4f.triCoords(v0, v1, v2, p);
+//             var tri = Vec4f.triCoords(v0, v1, v2, p);
 
-            // TODO: near plane clipping
-            if (tri.x < 0 or tri.y < 0 or tri.z < 0)
-                continue;
+//             // TODO: near plane clipping
+//             if (tri.x < 0 or tri.y < 0 or tri.z < 0)
+//                 continue;
 
-            tri.div3(area);
+//             tri.div3(area);
 
-            // if we use perspective correct interpolation we need to
-            // multiply the result of this interpolation by z, the depth
-            // of the point on the 3D triangle that the pixel overlaps.
-            const z = (tri.x * v0.z + tri.y * v1.z + tri.z * v2.z);
+//             // if we use perspective correct interpolation we need to
+//             // multiply the result of this interpolation by z, the depth
+//             // of the point on the 3D triangle that the pixel overlaps.
+//             const z = (tri.x * v0.z + tri.y * v1.z + tri.z * v2.z);
 
-            if (d.shader.depthTest == 1 and depthBuffer.setLessThan(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
-                continue;
+//             if (d.shader.depthTest == 1 and depthBuffer.setLessThan(@floatToInt(i32, x), @floatToInt(i32, y), z) == 0)
+//                 continue;
 
-            p.z = z;
+//             p.z = z;
 
-            // var pdprof = profile.?.beginSample("render.mesh.draw.tri.pixel.draw");
-            // defer profile.?.endSample(pdprof);
+//             // var pdprof = profile.?.beginSample("render.mesh.draw.tri.pixel.draw");
+//             // defer profile.?.endSample(pdprof);
 
-            // interpolate vertex colors across all pixels
-            fbc = Vec4f.triInterp(tri, c0, c1, c2, 1.0, 1.0);
-            pixelNormal = Vec4f.triInterp(tri, wn0, wn1, wn2, 1.0, 1.0);
-            uv = Vec4f.triInterp(tri, uv0, uv1, uv2, 1.0, 1.0);
+//             // interpolate vertex colors across all pixels
+//             fbc = Vec4f.triInterp(tri, c0, c1, c2, 1.0, 1.0);
+//             pixelNormal = Vec4f.triInterp(tri, wn0, wn1, wn2, 1.0, 1.0);
+//             uv = Vec4f.triInterp(tri, uv0, uv1, uv2, 1.0, 1.0);
 
-            var vc = d.shader.pixelShader(d.mvp, p, fbc, pixelNormal, uv, d.shader);
-            if (vc.w <= 0.0)
-                continue;
+//             var vc = d.shader.pixelShader(d.mvp, p, fbc, pixelNormal, uv, d.shader);
+//             if (vc.w <= 0.0)
+//                 continue;
 
-            vc.clamp01();
-            vc.scale(255);
+//             vc.clamp01();
+//             vc.scale(255);
 
-            c.setR(@floatToInt(u8, @fabs(vc.x)));
-            c.setG(@floatToInt(u8, @fabs(vc.y)));
-            c.setB(@floatToInt(u8, @fabs(vc.z)));
-            c.setA(@floatToInt(u8, @fabs(vc.w)));
+//             c.setR(@floatToInt(u8, @fabs(vc.x)));
+//             c.setG(@floatToInt(u8, @fabs(vc.y)));
+//             c.setB(@floatToInt(u8, @fabs(vc.z)));
+//             c.setA(@floatToInt(u8, @fabs(vc.w)));
 
-            _ = @atomicRmw(u32, &stats.renderedPixels, .Add, 1, .SeqCst);
-            writePixel(@floatToInt(i32, x), @floatToInt(i32, y), z, c);
-        }
-    }
+//             _ = @atomicRmw(u32, &stats.renderedPixels, .Add, 1, .SeqCst);
+//             writePixel(@floatToInt(i32, x), @floatToInt(i32, y), z, c);
+//         }
+//     }
 
-    // var center = mv0.addDup(mv1);
-    // center.add(mv2);
-    // center.div(3);
+//     // var center = mv0.addDup(mv1);
+//     // center.add(mv2);
+//     // center.div(3);
 
-    // // drawWorldLine(mvp, de0, rv0, Vec4f.init(0,1,0,1));
-    // // drawWorldLine(mvp, rv0, de1, Vec4f.init(0,0,1,0));
+//     // // drawWorldLine(mvp, de0, rv0, Vec4f.init(0,1,0,1));
+//     // // drawWorldLine(mvp, rv0, de1, Vec4f.init(0,0,1,0));
 
-    // //drawWorldLine()
-    // drawWorldLine(proj, center, center.addDup(triNormal), Vec4f.init(0,0,1,1));
+//     // //drawWorldLine()
+//     // drawWorldLine(proj, center, center.addDup(triNormal), Vec4f.init(0,0,1,1));
 
-    // drawWorldLine(mvp, rv0, rv0.addDup(n0), Vec4f.init(1,0,0,1));
+//     // drawWorldLine(mvp, rv0, rv0.addDup(n0), Vec4f.init(1,0,0,1));
 
-    // drawWorldLine(mvp, rv1, rv1.addDup(n1), Vec4f.init(0,1,0,1));
+//     // drawWorldLine(mvp, rv1, rv1.addDup(n1), Vec4f.init(0,1,0,1));
 
-    // drawWorldLine(mvp, rv2, rv2.addDup(n2), Vec4f.init(0,0,1,1));
-}
+//     // drawWorldLine(mvp, rv2, rv2.addDup(n2), Vec4f.init(0,0,1,1));
+// }
 
 
 
@@ -846,8 +865,8 @@ pub fn writePixel(x: i32, y: i32, z: f32, c: Color) void {
 }
 
 pub fn beginFrame(profiler: ?*Profile) *u8 {
-    // const tracy = trace(@src());
-    // defer tracy.end();
+    const zone = trace(@src());
+    defer zone.end();
 
     profile = profiler;
     var pprof = profile.?.beginSample("render.beginFrame");
@@ -855,18 +874,46 @@ pub fn beginFrame(profiler: ?*Profile) *u8 {
 
     stats.reset();
 
-    // colorBuffer.clear(Color.init(50, 50, 120, 255));
+    colorBuffer.clear(Color.init(50, 50, 120, 255));
     depthBuffer.clear(std.math.inf(f32));
 
-    triJobs.clearRetainingCapacity();
-    meshJobs.clearRetainingCapacity();
-    spanJobs.clearRetainingCapacity();
+    triJobs.reset();
+    meshJobs.reset();
+    spanJobs.reset();
     
     return &colorBuffer.bufferStart().color[0];
 }
 
 pub fn endFrame() void {
     //pixels.swapBuffers();
+    {
+        const zone = trace(@src());
+        defer zone.end();
+
+        stats.jobWaitCount = 0;
+        stats.jobWaitCount = 0;
+
+        // if(renderQueue.count() <= 0)
+        {
+            while( stats.totalMeshes <= 0 )
+            {
+                stats.jobCount+=1;
+                std.atomic.spinLoopHint();
+            }
+        }
+
+        while( renderQueue.count() > 0 )
+        {
+            stats.jobWaitCount += 1;
+            std.atomic.spinLoopHint();
+        }
+
+        assert(stats.jobWaitCount > 0);
+        assert(stats.totalMeshes == stats.renderedMeshes);
+    }
+
+    stats.trace();
+
 }
 
 pub fn shutdown() void {

@@ -48,6 +48,10 @@ pub fn PixelBuffer(comptime PixelType: type) type {
         }
 
         pub inline fn write(self: *SelfType, x: i32, y: i32, value: PixelType) void {
+            const offset = x + self.*.w * y;
+            if( offset < 0 or offset >= self.buffer.items.len)
+                return;
+                
             self.*.buffer.items[@intCast(usize, x + self.*.w * y)] = value;
         }
 

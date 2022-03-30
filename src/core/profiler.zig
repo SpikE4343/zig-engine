@@ -128,7 +128,7 @@ pub const Profile = struct {
         try stream.print("]}}", .{});
     }
 
-    pub fn jsonFileWrite(self: *Profile, allocator: *std.mem.Allocator, filepath: []const u8) !void {
+    pub fn jsonFileWrite(self: *Profile, allocator: std.mem.Allocator, filepath: []const u8) !void {
         const cwd = std.fs.cwd();
 
         var resolvedPath = try std.fs.path.resolve(allocator, &[_][]const u8{filepath});
