@@ -249,7 +249,7 @@ pub const TriRenderData = struct {
     id:u32,
     offset: u16,
 
-    meshData:MeshRenderData,
+    meshData:*MeshRenderData,
 
     indicies:[3]u16,
     
@@ -364,7 +364,7 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
     viewport = Vec4f.init(@intToFloat(f32, colorBuffer.w), @intToFloat(f32, colorBuffer.h), 0, 0);
 
     meshJobs = try JobPool(MeshRenderJob).init(alloc.*, 16);
-    triJobs = try JobPool(TriRenderJob).init(alloc.*, 4 * 1024);
+    triJobs = try JobPool(TriRenderJob).init(alloc.*, 1024 * 1024);
     spanJobs = try JobPool(SpanRenderJob).init(alloc.*, 1024);
 
     renderWorkers = try jobs.WorkerPool.init(&renderQueue, alloc, @intCast(u8, try std.Thread.getCpuCount()) >> 1);
@@ -413,19 +413,39 @@ fn drawMeshJob(meshJob:*MeshRenderData) void {
 
     _ = @atomicRmw(u32, &stats.totalMeshes, .Add, 1, .SeqCst);
 
+    
+    
+
+    var locked:bool = false;
     while (t < ids/3) {
-        const zone1 = trace(@src());
-        defer zone1.end();
+        if(!locked)
+        {
+            locked = true;
+            renderQueue.pending.lockForWrite();
+        }
 
         var job = triJobs.getItem();
         job.* = TriRenderJob.init();
         job.data.id = @truncate(u16, t);
         job.data.offset = t*3;
-        job.data.meshData = meshJob.*;
+        job.data.meshData = meshJob;
         job.complete = false;
-        renderQueue.pending.push(&job.job);
+        renderQueue.pending.pushNoLock(&job.job);
         t+=1;
+
+        if(t % 16 == 0)
+        {
+            locked = false;
+            renderQueue.pending.unlockForWrite();
+        }
     }
+
+    if(locked)
+    {
+        renderQueue.pending.unlockForWrite();
+    }
+
+    
 
     _ = @atomicRmw(u32, &stats.renderedMeshes, .Add, 1, .SeqCst);
 }

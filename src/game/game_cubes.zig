@@ -134,6 +134,13 @@ pub fn update() bool {
         // const renderStart = frameTimer.read();
         // renderTimer.reset();
         engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh, &meshMaterial);
+        engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh, &meshMaterial);
+        engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh, &meshMaterial);
+        engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh, &meshMaterial);
+        engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh, &meshMaterial);
+        engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh, &meshMaterial);
+        engine.render.drawMesh(&modelMat, &viewMat, &projMat, &mesh, &meshMaterial);
+
         engine.render.drawString(&font, "Hello World!", 10, 10, engine.Vec4f.one());
     }
 

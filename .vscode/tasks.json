@@ -4,15 +4,18 @@
     {
       "label": "zngine build",
       "type": "shell",
-      "command": "zig build",
-      "args": [],
+      "command": "zig",
+      "args": ["build", "-Dtracy=true", "-Dtracy-allocation=true", "-Dtracy-callstack=true", "-Ddebug=false"],
       "group": {
         "kind": "build",
         "isDefault": true
       },
       "problemMatcher": [
         "$gcc"
-      ]
+      ],
+      "options": {
+        
+      }
     },
     {
       "label": "zig test",

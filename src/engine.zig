@@ -46,8 +46,8 @@ var bufferAllocator = std.heap.page_allocator;
 pub const systemConfig = sys.Config{
   .windowWidth = 1260,
   .windowHeight = 768,
-  .renderWidth = 426,
-  .renderHeight = 240,
+  .renderWidth = 853,
+  .renderHeight = 480,
   .maxFps = 60,
   .fullscreen = false,
 };
@@ -108,7 +108,7 @@ pub fn main() !void {
     // var renderSampler:Sampler = undefined;
 
     while (!quit) {
-        tracy.markFrame();
+        tracy.frameMark();
         const mainTrace = trace(@src());
         defer mainTrace.end();
         {

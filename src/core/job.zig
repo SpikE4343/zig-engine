@@ -2,7 +2,7 @@ const std = @import("std");
 const math = std.math;
 
 const print = std.debug.print;
-// const trace = @import("../tracy.zig").trace;
+const trace = @import("../tracy.zig").trace;
 
 pub const Job = struct {
     pub const Error = error{JobError};
@@ -71,17 +71,20 @@ pub fn InPlaceQueue(comptime T: type) type {
             return s;
         }
 
-        pub fn push(self: *Self, node: ?*T) void {
-            //std.debug.warn("push: {}\n",.{std.Thread.getCurrentId()});
-
-            // self.lock.lock();
-            // defer self.lock.unlock();
-
+        pub fn lockForWrite(self:*Self) void {
             self.writeLock.lock();
-            defer self.writeLock.unlock();
 
             self.readLock.lock();
-            defer self.readLock.unlock();
+
+        }
+
+        pub fn unlockForWrite(self:*Self) void {
+            self.writeLock.unlock();
+            self.readLock.unlock();
+        }
+        pub fn pushNoLock(self: *Self, node: ?*T) void {
+            const ta = trace(@src());
+            defer ta.end();
 
             // print("push start {d}, {d}, {d}\n", .{@ptrToInt(self.head), @ptrToInt(self.tail), self.size});
 
@@ -99,11 +102,24 @@ pub fn InPlaceQueue(comptime T: type) type {
                 self.wait.post();
                 self.wait.post();
                 self.wait.post();
+                self.wait.post();
+                self.wait.post();
+                self.wait.post();
+                self.wait.post();
+
             }
 
             // if(self.wait.permits > 0)
             //     // print("push {d}, {d}, {d}\n", .{@ptrToInt(self.head), @ptrToInt(self.tail), self.size});
             //     self.wait.post();
+        }
+
+        pub fn push(self: *Self, node: ?*T) void {
+            const ta = trace(@src());
+            defer ta.end();
+            self.lockForWrite();
+            self.pushNoLock(node);
+            self.unlockForWrite();
         }
 
         pub fn pop(self: *Self) ?*T {
@@ -146,13 +162,15 @@ pub fn InPlaceQueue(comptime T: type) type {
                     return job;
 
                 // only wait if the queue is empty
-                if (self.head == null and attempts > 2) {
+                if (self.head == null and attempts > 63) {
                     // const tf = trace(@src());
                     // defer tf.end();
                     // print("pop wait {}, {d}\n", .{self.head, self.size});
                     self.wait.wait();
                     attempts = 0;
                 }
+
+                std.atomic.spinLoopHint();
             }
         }
 
@@ -192,9 +210,11 @@ pub const Worker = struct {
     pub fn run(self: *Worker) void {
         self.active = true;
         while (self.active) {
+            // const ta = trace(@src());
+            // defer ta.end();
             // std.debug.print("\n[{d}] pending pop: {d}\n", .{ std.Thread.getCurrentId(), self.runner.count()});
             var job = self.runner.pending.popWait();
-
+            
             // const ta = trace(@src());
             // defer ta.end();
             // std.debug.print("\n[{d}] executing job: {d}, {x}\n", .{ std.Thread.getCurrentId(), @ptrToInt(job), self.runner.count()});
@@ -205,13 +225,13 @@ pub const Worker = struct {
                 const result = job.?.execute() catch continue;
 
                 self.runner.removeRunningJob(job);
-
+                _=result;
             // std.debug.print("[{d}] complete job: {d}, {d}\n", .{std.Thread.getCurrentId(), @ptrToInt(job), self.runner.count()});
 
-            switch (result) {
-                .Complete, .Abort => {},
-                .Retry => self.runner.pending.push(job.?),
-            }
+            // switch (result) {
+            //     .Complete, .Abort => {},
+            //     .Retry => self.runner.pending.push(job.?),
+            // }
         }
     }
 
@@ -275,11 +295,15 @@ pub const Runner = struct {
     }
 
     pub fn addRunningJob(self:*Self, job: ?*Job) void {
+        // const ta = trace(@src());
+        // defer ta.end();
         _=job;
         _ = @atomicRmw(@TypeOf(self.running), &self.running, .Add, 1, .SeqCst);
     }
 
     pub fn removeRunningJob(self:*Self, job:?*Job) void {
+        // const ta = trace(@src());
+        // defer ta.end();
         _=job;
         _ = @atomicRmw(@TypeOf(self.running), &self.running, .Sub, 1, .SeqCst);
     }
@@ -313,6 +337,8 @@ pub fn Pool(comptime TItemType:type) type {
         }
 
         pub fn getItem(self:*Self) *TItemType {
+            // const ta = trace(@src());
+            // defer ta.end();
             // const id = self.nextItem.fetchAdd(1, .SeqCst);
             const id = @atomicRmw(@TypeOf(self.nextItem), &self.nextItem, .Add, 1, .SeqCst);
             return &self.items.items[id];
