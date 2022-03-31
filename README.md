@@ -27,7 +27,8 @@ Write a software rendering engine and explore some zig at the same time.
 
   
 ### Systems
-  - [ ] Threaded Job/Tasks  
+  - [x] Threaded Job/Tasks  
+  - [ ] Job List where a series of jobs can be allocated and setup then queued as a whole for workers
 
 ### I/O
   - [ ] Mesh Loading

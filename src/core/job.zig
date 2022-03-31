@@ -295,15 +295,11 @@ pub const Runner = struct {
     }
 
     pub fn addRunningJob(self:*Self, job: ?*Job) void {
-        // const ta = trace(@src());
-        // defer ta.end();
         _=job;
         _ = @atomicRmw(@TypeOf(self.running), &self.running, .Add, 1, .SeqCst);
     }
 
     pub fn removeRunningJob(self:*Self, job:?*Job) void {
-        // const ta = trace(@src());
-        // defer ta.end();
         _=job;
         _ = @atomicRmw(@TypeOf(self.running), &self.running, .Sub, 1, .SeqCst);
     }
