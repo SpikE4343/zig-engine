@@ -367,7 +367,7 @@ pub fn init(renderWidth: u16, renderHeight: u16, alloc: *std.mem.Allocator, prof
     triJobs = try JobPool(TriRenderJob).init(alloc.*, 1024 * 1024);
     spanJobs = try JobPool(SpanRenderJob).init(alloc.*, 1024);
 
-    renderWorkers = try jobs.WorkerPool.init(&renderQueue, alloc, @intCast(u8, try std.Thread.getCpuCount()) >> 1);
+    renderWorkers = try jobs.WorkerPool.init(&renderQueue, alloc, @intCast(u8, try std.Thread.getCpuCount())/2);
     try renderWorkers.start();
 
 }
@@ -414,15 +414,15 @@ fn drawMeshJob(meshJob:*MeshRenderData) void {
     _ = @atomicRmw(u32, &stats.totalMeshes, .Add, 1, .SeqCst);
 
     
-    
+    renderQueue.pending.lockForWrite();
+    defer renderQueue.pending.unlockForWrite();
 
     var locked:bool = false;
     while (t < ids/3) {
-        if(!locked)
-        {
-            locked = true;
-            renderQueue.pending.lockForWrite();
-        }
+        // if(!locked)
+        // {
+        //     locked = true;
+        // }
 
         var job = triJobs.getItem();
         job.* = TriRenderJob.init();
@@ -433,11 +433,11 @@ fn drawMeshJob(meshJob:*MeshRenderData) void {
         renderQueue.pending.pushNoLock(&job.job);
         t+=1;
 
-        if(t % 16 == 0)
-        {
-            locked = false;
-            renderQueue.pending.unlockForWrite();
-        }
+        // if(t % 16 == 0)
+        // {
+        //     locked = false;
+        //     renderQueue.pending.unlockForWrite();
+        // }
     }
 
     if(locked)

@@ -272,8 +272,7 @@ inline fn freeNamed(ptr: [*]u8, comptime name: [:0]const u8) void {
 }
 
 pub inline fn plotValue(name:[*c]const u8, value:anytype) void {
-    if(!enable) return;
-
+    if (!enable) return;
     switch (@typeInfo(@TypeOf(value))) {
         .Int, .ComptimeInt =>  {
             ___tracy_emit_plot(name, @intToFloat(f64, value));

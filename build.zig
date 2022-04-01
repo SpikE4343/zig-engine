@@ -33,7 +33,7 @@ pub fn build(b: *Builder) void {
     exe_options.addOption(bool, "debug mode", debug_build);
 
     if (tracy) {
-        const tracyPath = "../../tracy";
+        const tracyPath = "external/tracy";
 
         const client_cpp = std.fs.path.join(b.allocator, &[_][]const u8{ tracyPath, "TracyClient.cpp" }) catch unreachable;
 
