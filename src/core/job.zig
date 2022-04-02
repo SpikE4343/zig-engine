@@ -55,7 +55,7 @@ pub fn InPlaceQueue(comptime T: type) type {
         writeLock: std.Thread.Mutex.AtomicMutex,
         readLock: std.Thread.Mutex.AtomicMutex,
         wait: std.Thread.Semaphore,
-        
+
         size: usize,
 
         pub fn init() Self {
@@ -71,14 +71,13 @@ pub fn InPlaceQueue(comptime T: type) type {
             return s;
         }
 
-        pub fn lockForWrite(self:*Self) void {
+        pub fn lockForWrite(self: *Self) void {
             self.writeLock.lock();
 
             self.readLock.lock();
-
         }
 
-        pub fn unlockForWrite(self:*Self) void {
+        pub fn unlockForWrite(self: *Self) void {
             self.writeLock.unlock();
             self.readLock.unlock();
         }
@@ -95,8 +94,7 @@ pub fn InPlaceQueue(comptime T: type) type {
 
             _ = @atomicRmw(@TypeOf(self.size), &self.size, .Add, 1, .SeqCst);
 
-            if (self.head == null)
-            {
+            if (self.head == null) {
                 self.head = self.tail;
                 self.wait.post();
                 self.wait.post();
@@ -106,7 +104,6 @@ pub fn InPlaceQueue(comptime T: type) type {
                 self.wait.post();
                 self.wait.post();
                 self.wait.post();
-
             }
 
             // if(self.wait.permits > 0)
@@ -127,11 +124,10 @@ pub fn InPlaceQueue(comptime T: type) type {
             defer self.readLock.unlock();
 
             var node = self.head orelse return null;
-            if(self.head == self.tail) {
+            if (self.head == self.tail) {
                 self.head = null;
                 self.tail = null;
-            }
-            else {
+            } else {
                 self.head = self.head.?.next;
             }
 
@@ -178,7 +174,7 @@ pub fn InPlaceQueue(comptime T: type) type {
             return self.head == null;
         }
 
-        pub fn count(self:*Self) usize {
+        pub fn count(self: *Self) usize {
             return @atomicLoad(@TypeOf(self.size), &self.size, .SeqCst);
         }
     };
@@ -186,13 +182,14 @@ pub fn InPlaceQueue(comptime T: type) type {
 
 pub const Queue = InPlaceQueue(Job);
 
+//
 pub const Worker = struct {
-    runner:*Runner,
+    runner: *Runner,
     thread: std.Thread,
     id: u8,
     active: bool,
 
-    pub fn init(ident: u8, runner:*Runner) !Worker {
+    pub fn init(ident: u8, runner: *Runner) !Worker {
         var worker = Worker{
             .id = ident,
             .runner = runner,
@@ -210,23 +207,14 @@ pub const Worker = struct {
     pub fn run(self: *Worker) void {
         self.active = true;
         while (self.active) {
-            // const ta = trace(@src());
-            // defer ta.end();
-            // std.debug.print("\n[{d}] pending pop: {d}\n", .{ std.Thread.getCurrentId(), self.runner.count()});
             var job = self.runner.pending.popWait();
-            
-            // const ta = trace(@src());
-            // defer ta.end();
-            // std.debug.print("\n[{d}] executing job: {d}, {x}\n", .{ std.Thread.getCurrentId(), @ptrToInt(job), self.runner.count()});
-            
-                self.runner.addRunningJob(job);
-                
 
-                const result = job.?.execute() catch continue;
+            self.runner.addRunningJob(job);
 
-                self.runner.removeRunningJob(job);
-                _=result;
-            // std.debug.print("[{d}] complete job: {d}, {d}\n", .{std.Thread.getCurrentId(), @ptrToInt(job), self.runner.count()});
+            const result = job.?.execute() catch continue;
+
+            self.runner.removeRunningJob(job);
+            _ = result;
 
             // switch (result) {
             //     .Complete, .Abort => {},
@@ -240,7 +228,7 @@ pub const Worker = struct {
     }
 };
 
-/// Group of workers pulling from the same queue
+// Group of workers pulling from the same queue
 pub const WorkerPool = struct {
     workers: std.ArrayList(Worker),
     queue: *Runner,
@@ -279,48 +267,128 @@ pub const WorkerPool = struct {
     }
 };
 
+pub fn Batch(comptime TDataType: type) type {
+    return struct {
+        const Self = @This();
 
+        pub const Error = error{BatchError};
+        pub const Result = enum { Complete, Retry, Abort };
+        pub const ExecuteFunc = fn (index:usize, total:usize, self: *TDataType) Error!Result;
+
+        jobs: std.ArrayList(TDataType),
+
+        executeFn: ExecuteFunc,
+
+        iterator: usize,
+        complete: usize,
+
+        pub fn init(executeFn: ExecuteFunc, allocator: std.mem.Allocator, capacity: usize) !Self {
+            var list = try std.ArrayList(TJobType).initCapacity(allocator, size);
+
+            var self = Self{
+                .jobs = list,
+                .iterator = 0,
+                .complete = 0,
+                .executeFn = executeFn,
+            };
+
+            return self;
+        }
+
+        pub fn reset(self: *Self) void {
+            // TODO: make and return error?
+            assert(!self.hasWork() and self.isComplete());
+
+            _ = @atomicStore(@TypeOf(self.iterator), &self.iterator, 0, .SeqCst);
+            _ = @atomicStore(@TypeOf(self.complete), &self.complete, 0, .SeqCst);
+        }
+
+        pub fn get(self: *Self, index: usize) ?*TJobType {
+            return &self.jobs.items[index] orelse null;
+        }
+
+        pub fn size(self: Self) usize {
+            return self.jobs.items.len;
+        }
+
+        pub fn resize(self: Self) !void {
+            try self.jobs.resize(size);
+        }
+
+        pub fn workerRunOne(self: *Self) !void {
+            const index = @atomicRmw(usize, &self.iterator, .Add, 1, .SeqCst);
+            var work = self.get(index);
+            if (work == null)
+                return;
+
+            _ = try self.executeFn(index, self.jobs.items.len, work);
+
+            _ = @atomicRmw(usize, &self.complete, .Add, 1, .SeqCst);
+        }
+
+        pub fn isComplete(self: Self) bool {
+            return @atomicLoad(@TypeOf(self.complete), &self.complete, .SeqCst) >= self.size();
+        }
+
+        pub fn hasWork(self:Self) bool {
+            return @atomicLoad(@TypeOf(self.complete), &self.complete, .SeqCst) < self.size();
+        }
+    };
+}
 
 pub const Runner = struct {
     const Self = @This();
+    const BatchQueue = InPlaceQueue(Batch(anytype));
 
-    pending:Queue,
-    running:usize,
+    pending: BatchQueue,
+    // running: usize,
 
     pub fn init() Self {
-        return Self{
-            .pending = Queue.init(),
-            .running = 0
-        };
+        return Self{ .pending = BatchQueue.init()};
     }
 
-    pub fn addRunningJob(self:*Self, job: ?*Job) void {
-        _=job;
-        _ = @atomicRmw(@TypeOf(self.running), &self.running, .Add, 1, .SeqCst);
-    }
+    // pub fn addRunningJob(self: *Self, job: ?*Job) void {
+    //     _ = job;
+    //     _ = @atomicRmw(@TypeOf(self.running), &self.running, .Add, 1, .SeqCst);
+    // }
 
-    pub fn removeRunningJob(self:*Self, job:?*Job) void {
-        _=job;
-        _ = @atomicRmw(@TypeOf(self.running), &self.running, .Sub, 1, .SeqCst);
-    }
+    // pub fn removeRunningJob(self: *Self, job: ?*Job) void {
+    //     _ = job;
+    //     _ = @atomicRmw(@TypeOf(self.running), &self.running, .Sub, 1, .SeqCst);
+    // }
 
-    pub fn count(self:*Self) usize {
-        return @atomicLoad(@TypeOf(self.running), &self.running, .SeqCst) + self.pending.count();
+    // pub fn count(self: *Self) usize {
+    //     return @atomicLoad(@TypeOf(self.running), &self.running, .SeqCst) + self.pending.count();
+    // }
+
+    // Run by worker thread
+    pub fn workerExecute(self:*Self) void {
+        var node = self.pending.head;
+        while(node != null){
+            if(node.?.hasWork())
+            {
+                node.?.workerRunOne();
+                return;
+            }
+
+            node = node.?.next;
+
+        }
     }
 };
 
-pub fn Pool(comptime TItemType:type) type {
+pub fn Pool(comptime TItemType: type) type {
     return struct {
         const Self = @This();
         const ItemList = std.ArrayList(TItemType);
         const AtomicUSize = std.atomic.Atomic(usize);
 
-        items:ItemList,
+        items: ItemList,
 
         // nextItem:std.atomic.Atomic(usize),
-        nextItem:usize,
+        nextItem: usize,
 
-        pub fn init(alloc:std.mem.Allocator, size:usize) !Self {
+        pub fn init(alloc: std.mem.Allocator, size: usize) !Self {
             var self = Self{
                 // .nextItem = AtomicUSize.init(0),
                 .nextItem = 0,
@@ -332,28 +400,25 @@ pub fn Pool(comptime TItemType:type) type {
             return self;
         }
 
-        pub fn getItem(self:*Self) *TItemType {
-            // const ta = trace(@src());
-            // defer ta.end();
-            // const id = self.nextItem.fetchAdd(1, .SeqCst);
+        pub fn getItem(self: *Self) *TItemType {
             const id = @atomicRmw(@TypeOf(self.nextItem), &self.nextItem, .Add, 1, .SeqCst);
             return &self.items.items[id];
         }
 
-        pub fn reset(self:*Self) void {
-            @atomicStore(@TypeOf(self.nextItem), &self.nextItem,0, .SeqCst);
+        pub fn reset(self: *Self) void {
+            @atomicStore(@TypeOf(self.nextItem), &self.nextItem, 0, .SeqCst);
             // self.nextItem.store(0, .SeqCst);
         }
 
-        pub fn deinit(self:*Self) void {
+        pub fn deinit(self: *Self) void {
             self.items.deinit();
         }
     };
 }
-//
-// Tests
-//
 
+// ============================================================================
+// Tests
+// ============================================================================
 pub const TestJob = struct {
     job: Job,
     id: u8,
@@ -496,8 +561,7 @@ test "Job Workers" {
         try w.start();
     }
 
-     while (queue.count() > 0)
-    {
+    while (queue.count() > 0) {
         // std.debug.print("remaining: {d}\n", .{queue.count()});
         std.time.sleep(1_000_000);
     }
@@ -530,8 +594,7 @@ test "Job Worker Pool" {
 
     try pool.start();
 
-    while (queue.count() > 0)
-    {
+    while (queue.count() > 0) {
         // print("remaining: {d}\n", .{queue.count()});
         std.time.sleep(1_000_000);
     }

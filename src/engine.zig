@@ -46,8 +46,10 @@ var bufferAllocator = std.heap.page_allocator;
 pub const systemConfig = sys.Config{
   .windowWidth = 1260,
   .windowHeight = 768,
-  .renderWidth = 853,
-  .renderHeight = 480,
+  .renderWidth = 426,
+  .renderHeight = 240,
+//   .renderWidth = 853,
+//   .renderHeight = 480,
   .maxFps = 60,
   .fullscreen = false,
 };
